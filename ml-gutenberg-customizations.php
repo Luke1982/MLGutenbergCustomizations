@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MajorLabel Gutenberg Customizations
  * Description: Custom margin and padding controls for mobile screens in the Gutenberg editor.
- * Version: 1.0.9
+ * Version: 1.1.0
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Text Domain: ml-gutenberg-customizations
@@ -135,6 +135,7 @@ class ML_Gutenberg_Customizations {
 		$custom_min_width          = isset( $attrs['mlCustomMinWidth'] ) && '' !== $attrs['mlCustomMinWidth']
 			? $attrs['mlCustomMinWidth']
 			: '';
+		$is_hidden                 = ! empty( $attrs['mlHidden'] );
 		$custom_bp                 = isset( $attrs['mlMobileBreakpoint'] ) ? absint( $attrs['mlMobileBreakpoint'] ) : 0;
 		$has_custom_bp             = $custom_bp > 0;
 		$sides                     = array( 'top', 'right', 'bottom', 'left' );
@@ -190,7 +191,7 @@ class ML_Gutenberg_Customizations {
 			$inline_rules[] = 'flex-basis:' . esc_attr( $flex_basis ) . ' !important';
 		}
 
-		if ( empty( $classes ) && empty( $inline_rules ) && empty( $custom_margin_declarations ) && empty( $flex_basis ) && empty( $custom_min_width ) ) {
+		if ( empty( $classes ) && empty( $inline_rules ) && empty( $custom_margin_declarations ) && empty( $flex_basis ) && empty( $custom_min_width ) && ! $is_hidden ) {
 			return $block_content;
 		}
 
@@ -277,6 +278,16 @@ class ML_Gutenberg_Customizations {
 				$full_style     = $existing_style
 					? rtrim( $existing_style, ';' ) . ';' . $min_w_decl
 					: $min_w_decl;
+				$processor->set_attribute( 'style', $full_style );
+			}
+
+			// Hide the block on the frontend.
+			if ( $is_hidden ) {
+				$existing_style = $processor->get_attribute( 'style' ) ?? '';
+				$hidden_decl    = 'display:none';
+				$full_style     = $existing_style
+					? rtrim( $existing_style, ';' ) . ';' . $hidden_decl
+					: $hidden_decl;
 				$processor->set_attribute( 'style', $full_style );
 			}
 		}

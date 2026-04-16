@@ -2,7 +2,8 @@ import { addFilter } from "@wordpress/hooks";
 import { createHigherOrderComponent } from "@wordpress/compose";
 
 import MobileSpacingPanel from "./components/MobileSpacingPanel";
-import { getMobileSpacingClasses, getCustomMarginCSS } from "./utils/classes";
+import VisibilityPanel from "./components/VisibilityPanel";
+import { getMobileSpacingClasses, getCustomMarginCSS, getHiddenOverlayCSS } from "./utils/classes";
 
 import "./style.scss";
 
@@ -64,6 +65,10 @@ addFilter(
           type: "string",
           default: "",
         },
+        mlHidden: {
+          type: "boolean",
+          default: false,
+        },
       },
     };
   },
@@ -79,6 +84,7 @@ const withMobileSpacingControls = createHigherOrderComponent((BlockEdit) => {
     }
 
     const customCSS = getCustomMarginCSS(props.attributes, props.clientId);
+    const hiddenCSS = getHiddenOverlayCSS(props.attributes, props.clientId);
 
     return (
       <>
@@ -87,7 +93,12 @@ const withMobileSpacingControls = createHigherOrderComponent((BlockEdit) => {
           attributes={props.attributes}
           setAttributes={props.setAttributes}
         />
+        <VisibilityPanel
+          attributes={props.attributes}
+          setAttributes={props.setAttributes}
+        />
         {customCSS && <style>{customCSS}</style>}
+        {hiddenCSS && <style>{hiddenCSS}</style>}
       </>
     );
   };

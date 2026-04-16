@@ -90,3 +90,19 @@ export function getCustomMarginCSS(attributes, clientId) {
 
   return rule;
 }
+
+/**
+ * Build a CSS string that creates a semi-opaque white overlay on a block
+ * in the editor to indicate it is hidden on the frontend.
+ *
+ * Returns an empty string when the block is not hidden.
+ */
+export function getHiddenOverlayCSS(attributes, clientId) {
+  const { mlHidden = false } = attributes;
+  if (!mlHidden) return "";
+
+  return (
+    `[data-block="${clientId}"]{position:relative}` +
+    `[data-block="${clientId}"]::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,0.8);pointer-events:none;z-index:1}`
+  );
+}

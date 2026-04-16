@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MajorLabel Gutenberg Customizations
  * Description: Custom margin and padding controls for mobile screens in the Gutenberg editor.
- * Version: 1.2.2
+ * Version: 1.3.2
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Text Domain: ml-gutenberg-customizations
@@ -38,6 +38,8 @@ class ML_Gutenberg_Customizations {
 		foreach ( self::SUPPORTED_BLOCKS as $block ) {
 			add_filter( "render_block_{$block}", array( $this, 'add_mobile_spacing_classes' ), 10, 2 );
 		}
+
+		add_filter( 'render_block_core/cover', array( $this, 'apply_cover_vertical_align' ), 10, 2 );
 	}
 
 	/**
@@ -341,6 +343,51 @@ class ML_Gutenberg_Customizations {
 		}
 
 		return $html;
+	}
+
+	/**
+	 * Map mlCoverVerticalAlign values to CSS justify-content values.
+	 */
+	private const COVER_ALIGN_MAP = array(
+		'top'    => 'flex-start',
+		'center' => 'center',
+		'bottom' => 'flex-end',
+	);
+
+	/**
+	 * Apply vertical content alignment to core/cover blocks.
+	 *
+	 * Adds justify-content to the .wp-block-cover__inner-container element.
+	 *
+	 * @param string $block_content The block's rendered HTML.
+	 * @param array  $block         The parsed block data.
+	 * @return string Modified block HTML.
+	 */
+	public function apply_cover_vertical_align( string $block_content, array $block ): string {
+		$align = $block['attrs']['mlCoverVerticalAlign'] ?? '';
+
+		if ( empty( $align ) || ! isset( self::COVER_ALIGN_MAP[ $align ] ) ) {
+			return $block_content;
+		}
+
+		$justify   = self::COVER_ALIGN_MAP[ $align ];
+		$processor = new WP_HTML_Tag_Processor( $block_content );
+
+		// Find the inner container div.
+		while ( $processor->next_tag() ) {
+			$cls = $processor->get_attribute( 'class' ) ?? '';
+			if ( false !== strpos( $cls, 'wp-block-cover__inner-container' ) ) {
+				$existing_style = $processor->get_attribute( 'style' ) ?? '';
+				$decl           = 'display:flex;flex-direction:column;height:100%;justify-content:' . $justify . ';align-self:' . $justify;
+				$full_style     = $existing_style
+					? rtrim( $existing_style, ';' ) . ';' . $decl
+					: $decl;
+				$processor->set_attribute( 'style', $full_style );
+				break;
+			}
+		}
+
+		return $processor->get_updated_html();
 	}
 }
 

@@ -15,9 +15,7 @@ export default function LinkToolbar({ attributes, setAttributes }) {
         <ToolbarButton
           icon={linkOff}
           label={__("Unlink", "ml-gutenberg-customizations")}
-          onClick={() =>
-            setAttributes({ mlLinkUrl: "", mlLinkTarget: "" })
-          }
+          onClick={() => setAttributes({ mlLinkUrl: "", mlLinkTarget: "" })}
           isActive
         />
       ) : (

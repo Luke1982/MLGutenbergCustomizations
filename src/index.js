@@ -4,7 +4,12 @@ import { createHigherOrderComponent } from "@wordpress/compose";
 import MobileSpacingPanel from "./components/MobileSpacingPanel";
 import VisibilityPanel from "./components/VisibilityPanel";
 import LinkToolbar from "./components/LinkToolbar";
-import { getMobileSpacingClasses, getCustomMarginCSS, getHiddenOverlayCSS } from "./utils/classes";
+import CoverVerticalAlignToolbar from "./components/CoverVerticalAlignToolbar";
+import {
+  getMobileSpacingClasses,
+  getCustomMarginCSS,
+  getHiddenOverlayCSS,
+} from "./utils/classes";
 
 import "./style.scss";
 
@@ -150,4 +155,69 @@ addFilter(
   "editor.BlockListBlock",
   "ml-gutenberg-customizations/mobile-spacing-editor-classes",
   withMobileSpacingEditorClasses,
+);
+
+/**
+ * Register the vertical-align attribute for core/cover.
+ */
+addFilter(
+  "blocks.registerBlockType",
+  "ml-gutenberg-customizations/cover-vertical-align-attribute",
+  (settings, name) => {
+    if (name !== "core/cover") {
+      return settings;
+    }
+
+    return {
+      ...settings,
+      attributes: {
+        ...settings.attributes,
+        mlCoverVerticalAlign: {
+          type: "string",
+          default: "",
+        },
+      },
+    };
+  },
+);
+
+/**
+ * Inject the vertical-alignment toolbar into core/cover.
+ */
+const withCoverVerticalAlignControls = createHigherOrderComponent(
+  (BlockEdit) => {
+    return (props) => {
+      if (props.name !== "core/cover") {
+        return <BlockEdit {...props} />;
+      }
+
+      const { mlCoverVerticalAlign = "" } = props.attributes;
+      const justifyValue = {
+        top: "flex-start",
+        center: "center",
+        bottom: "flex-end",
+      }[mlCoverVerticalAlign];
+      const alignCSS = justifyValue
+        ? `[data-block="${props.clientId}"] .wp-block-cover__inner-container{display:flex !important;flex-direction:column !important;height:100% !important;justify-content:${justifyValue} !important;align-self:${justifyValue} !important}`
+        : "";
+
+      return (
+        <>
+          <BlockEdit {...props} />
+          <CoverVerticalAlignToolbar
+            attributes={props.attributes}
+            setAttributes={props.setAttributes}
+          />
+          {alignCSS && <style>{alignCSS}</style>}
+        </>
+      );
+    };
+  },
+  "withCoverVerticalAlignControls",
+);
+
+addFilter(
+  "editor.BlockEdit",
+  "ml-gutenberg-customizations/cover-vertical-align-controls",
+  withCoverVerticalAlignControls,
 );

@@ -1,0 +1,43 @@
+// Mobile spacing utility classes.
+//
+// This stylesheet is loaded with a <link media="(max-width: …)"> attribute
+// whose breakpoint equals the WordPress content-width setting, so NO
+// @media wrapper is needed here — the browser applies the rules only when
+// the viewport is narrower than the content width.
+//
+// Class names follow the pattern:
+//   has-mobile-{padding|margin}-{side}-{spacing-slug}
+//
+// Spacing slugs (0, 20–80) map to WordPress preset CSS custom properties:
+//   --wp--preset--spacing--{slug}
+
+$spacing-sizes: (0, 20, 30, 40, 50, 60, 70, 80);
+$sides: ("top", "right", "bottom", "left");
+$properties: ("padding", "margin");
+
+// ── Individual-side classes ──────────────────────────────────────────
+@each $property in $properties {
+    @each $side in $sides {
+        @each $size in $spacing-sizes {
+            .has-mobile-#{$property}-#{$side}-#{$size} {
+                @if $size==0 {
+                    #{$property}-#{$side}: 0 !important;
+                }
+
+                @else {
+                    #{$property}-#{$side}: var(--wp--preset--spacing--#{$size}) !important;
+                }
+            }
+        }
+    }
+}
+
+// ── Flex direction column ────────────────────────────────────────────
+.has-mobile-flex-column {
+    flex-direction: column !important;
+}
+
+// ── Flex-basis (value set via inline CSS variable) ───────────────────
+.has-mobile-flex-basis {
+    flex-basis: var(--ml-mobile-flex-basis) !important;
+}

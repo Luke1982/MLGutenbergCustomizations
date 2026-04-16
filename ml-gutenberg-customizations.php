@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MajorLabel Gutenberg Customizations
  * Description: Custom margin and padding controls for mobile screens in the Gutenberg editor.
- * Version: 1.1.0
+ * Version: 1.2.2
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Text Domain: ml-gutenberg-customizations
@@ -106,6 +106,18 @@ class ML_Gutenberg_Customizations {
 			filemtime( $css_file ),
 			'(max-width: ' . esc_attr( $this->get_mobile_breakpoint() ) . ')'
 		);
+
+		// Stretched-link styles — must apply at all viewports.
+		// Cannot use wp_add_inline_style on the mobile stylesheet because it
+		// inherits the parent's media attribute.
+		wp_register_style( 'ml-gutenberg-link-block', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-link-block' );
+		wp_add_inline_style(
+			'ml-gutenberg-link-block',
+			'.ml-has-link{position:relative;cursor:pointer}'
+			. '.ml-block-link{position:absolute;inset:0;z-index:1}'
+			. '.ml-has-link a:not(.ml-block-link),.ml-has-link button,.ml-has-link input,.ml-has-link select,.ml-has-link textarea{position:relative;z-index:2}'
+		);
 	}
 
 	/**
@@ -136,6 +148,12 @@ class ML_Gutenberg_Customizations {
 			? $attrs['mlCustomMinWidth']
 			: '';
 		$is_hidden                 = ! empty( $attrs['mlHidden'] );
+		$link_url                  = isset( $attrs['mlLinkUrl'] ) && '' !== $attrs['mlLinkUrl']
+			? $attrs['mlLinkUrl']
+			: '';
+		$link_target               = isset( $attrs['mlLinkTarget'] ) && '' !== $attrs['mlLinkTarget']
+			? $attrs['mlLinkTarget']
+			: '';
 		$custom_bp                 = isset( $attrs['mlMobileBreakpoint'] ) ? absint( $attrs['mlMobileBreakpoint'] ) : 0;
 		$has_custom_bp             = $custom_bp > 0;
 		$sides                     = array( 'top', 'right', 'bottom', 'left' );
@@ -191,7 +209,7 @@ class ML_Gutenberg_Customizations {
 			$inline_rules[] = 'flex-basis:' . esc_attr( $flex_basis ) . ' !important';
 		}
 
-		if ( empty( $classes ) && empty( $inline_rules ) && empty( $custom_margin_declarations ) && empty( $flex_basis ) && empty( $custom_min_width ) && ! $is_hidden ) {
+		if ( empty( $classes ) && empty( $inline_rules ) && empty( $custom_margin_declarations ) && empty( $flex_basis ) && empty( $custom_min_width ) && ! $is_hidden && empty( $link_url ) ) {
 			return $block_content;
 		}
 
@@ -292,7 +310,37 @@ class ML_Gutenberg_Customizations {
 			}
 		}
 
-		return $inline_style . $processor->get_updated_html();
+		$html = $inline_style . $processor->get_updated_html();
+
+		// Add a stretched-link overlay when a link URL is set.
+		// We inject an empty <a> inside the block instead of converting the
+		// outer <div> to <a>, because nested <a> tags (inner links, buttons)
+		// are invalid HTML and cause browsers to break the DOM tree.
+		if ( $link_url ) {
+			$safe_url = esc_url( $link_url );
+			$target   = $link_target ? ' target="' . esc_attr( $link_target ) . '"' : '';
+			$rel      = '_blank' === $link_target ? ' rel="noopener noreferrer"' : '';
+
+			$link_el = sprintf(
+				'<a class="ml-block-link" href="%s"%s%s aria-hidden="true" tabindex="-1"></a>',
+				$safe_url,
+				$target,
+				$rel
+			);
+
+			// Insert the stretched link element right after the first opening tag.
+			$html = preg_replace( '/^(\s*<[^>]+>)/s', '$1' . $link_el, $html, 1 );
+
+			// Add the helper class to the wrapper.
+			$proc2 = new WP_HTML_Tag_Processor( $html );
+			if ( $proc2->next_tag() ) {
+				$existing_cls = $proc2->get_attribute( 'class' ) ?? '';
+				$proc2->set_attribute( 'class', trim( $existing_cls . ' ml-has-link' ) );
+			}
+			$html = $proc2->get_updated_html();
+		}
+
+		return $html;
 	}
 }
 

@@ -3,6 +3,7 @@ import { createHigherOrderComponent } from "@wordpress/compose";
 
 import MobileSpacingPanel from "./components/MobileSpacingPanel";
 import VisibilityPanel from "./components/VisibilityPanel";
+import LinkToolbar from "./components/LinkToolbar";
 import { getMobileSpacingClasses, getCustomMarginCSS, getHiddenOverlayCSS } from "./utils/classes";
 
 import "./style.scss";
@@ -69,6 +70,14 @@ addFilter(
           type: "boolean",
           default: false,
         },
+        mlLinkUrl: {
+          type: "string",
+          default: "",
+        },
+        mlLinkTarget: {
+          type: "string",
+          default: "",
+        },
       },
     };
   },
@@ -94,6 +103,10 @@ const withMobileSpacingControls = createHigherOrderComponent((BlockEdit) => {
           setAttributes={props.setAttributes}
         />
         <VisibilityPanel
+          attributes={props.attributes}
+          setAttributes={props.setAttributes}
+        />
+        <LinkToolbar
           attributes={props.attributes}
           setAttributes={props.setAttributes}
         />

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MajorLabel Gutenberg Customizations
  * Description: Custom margin and padding controls for mobile screens in the Gutenberg editor.
- * Version: 1.3.2
+ * Version: 1.4.10
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Text Domain: ml-gutenberg-customizations
@@ -32,12 +32,17 @@ class ML_Gutenberg_Customizations {
 	 * Register hooks for editor assets, block assets, and render filters.
 	 */
 	public function __construct() {
+		add_action( 'init', array( $this, 'register_term_image_block' ) );
 		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_editor_assets' ) );
 		add_action( 'enqueue_block_assets', array( $this, 'enqueue_block_assets' ) );
 
 		foreach ( self::SUPPORTED_BLOCKS as $block ) {
 			add_filter( "render_block_{$block}", array( $this, 'add_mobile_spacing_classes' ), 10, 2 );
 		}
+
+		// Fallback: catch inner blocks rendered by third-party plugins
+		// (e.g. terms-query) that bypass render_block() for children.
+		add_filter( 'render_block', array( $this, 'process_parent_block_links' ), 20, 2 );
 
 		add_filter( 'render_block_core/cover', array( $this, 'apply_cover_vertical_align' ), 10, 2 );
 	}
@@ -263,7 +268,7 @@ class ML_Gutenberg_Customizations {
 			);
 		}
 
-		$processor = new WP_HTML_Tag_Processor( $block_content );
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
 
 		if ( $processor->next_tag() ) {
 			if ( ! empty( $classes ) ) {
@@ -334,7 +339,7 @@ class ML_Gutenberg_Customizations {
 			$html = preg_replace( '/^(\s*<[^>]+>)/s', '$1' . $link_el, $html, 1 );
 
 			// Add the helper class to the wrapper.
-			$proc2 = new WP_HTML_Tag_Processor( $html );
+			$proc2 = new \WP_HTML_Tag_Processor( $html );
 			if ( $proc2->next_tag() ) {
 				$existing_cls = $proc2->get_attribute( 'class' ) ?? '';
 				$proc2->set_attribute( 'class', trim( $existing_cls . ' ml-has-link' ) );
@@ -371,7 +376,7 @@ class ML_Gutenberg_Customizations {
 		}
 
 		$justify   = self::COVER_ALIGN_MAP[ $align ];
-		$processor = new WP_HTML_Tag_Processor( $block_content );
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
 
 		// Find the inner container div.
 		while ( $processor->next_tag() ) {
@@ -388,6 +393,360 @@ class ML_Gutenberg_Customizations {
 		}
 
 		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Fallback link injection for inner blocks of third-party parent
+	 * blocks that bypass render_block() for their children.
+	 *
+	 * When a parent block is rendered through render_block(), its
+	 * $block['innerBlocks'] still carry the full parsed attribute data.
+	 * We walk the tree to find supported blocks with link settings whose
+	 * HTML hasn't been processed yet, then inject the overlay link.
+	 *
+	 * @param string $block_content The parent block's rendered HTML.
+	 * @param array  $block         The parsed parent block data.
+	 * @return string Modified HTML with link overlays.
+	 */
+	public function process_parent_block_links( string $block_content, array $block ): string {
+		// Blocks we handle individually already get their own render_block_{name} filter.
+		if ( in_array( $block['blockName'] ?? '', self::SUPPORTED_BLOCKS, true ) ) {
+			return $block_content;
+		}
+
+		if ( empty( $block['innerBlocks'] ) ) {
+			return $block_content;
+		}
+
+		$link_configs = array();
+		$this->collect_link_configs( $block['innerBlocks'], $link_configs );
+
+		if ( empty( $link_configs ) ) {
+			return $block_content;
+		}
+
+		foreach ( $link_configs as $config ) {
+			$block_content = $this->inject_inner_block_links( $block_content, $config );
+		}
+
+		return $block_content;
+	}
+
+	/**
+	 * Recursively walk inner blocks to find supported ones with link settings.
+	 *
+	 * @param array $inner_blocks The inner blocks to walk.
+	 * @param array &$configs     Collected link configurations.
+	 */
+	private function collect_link_configs( array $inner_blocks, array &$configs ): void {
+		foreach ( $inner_blocks as $inner_block ) {
+			$block_name = $inner_block['blockName'] ?? '';
+			$attrs      = $inner_block['attrs'] ?? array();
+
+			if ( in_array( $block_name, self::SUPPORTED_BLOCKS, true ) ) {
+				$link_url  = isset( $attrs['mlLinkUrl'] ) && '' !== $attrs['mlLinkUrl'] ? $attrs['mlLinkUrl'] : '';
+				$link_type = isset( $attrs['mlLinkType'] ) && '' !== $attrs['mlLinkType'] ? $attrs['mlLinkType'] : '';
+
+				if ( $link_url || $link_type ) {
+					// Map core/group → wp-block-group, core/column → wp-block-column, etc.
+					$css_class = str_replace( '/', '-', str_replace( 'core/', 'wp-block-', $block_name ) );
+
+					$configs[] = array(
+						'css_class'   => $css_class,
+						'link_url'    => $link_url,
+						'link_type'   => $link_type,
+						'link_target' => isset( $attrs['mlLinkTarget'] ) && '' !== $attrs['mlLinkTarget'] ? $attrs['mlLinkTarget'] : '',
+					);
+				}
+			}
+
+			if ( ! empty( $inner_block['innerBlocks'] ) ) {
+				$this->collect_link_configs( $inner_block['innerBlocks'], $configs );
+			}
+		}
+	}
+
+	/**
+	 * Inject link overlays into HTML elements matching a CSS class.
+	 *
+	 * Splits the HTML at each matching opening tag, then injects the
+	 * stretched-link <a> and the ml-has-link helper class.  For dynamic
+	 * link types ("term" / "post") where WordPress context isn't available
+	 * (e.g. inside a third-party terms query), falls back to extracting
+	 * the href of the first inner <a> in each block instance.
+	 *
+	 * @param string $html   The parent block's HTML content.
+	 * @param array  $config Link configuration from collect_link_configs().
+	 * @return string Modified HTML.
+	 */
+	private function inject_inner_block_links( string $html, array $config ): string {
+		$css_class   = preg_quote( $config['css_class'], '/' );
+		$static_url  = $config['link_url'];
+		$link_type   = $config['link_type'];
+		$link_target = $config['link_target'];
+		$target_attr = $link_target ? ' target="' . esc_attr( $link_target ) . '"' : '';
+		$rel_attr    = '_blank' === $link_target ? ' rel="noopener noreferrer"' : '';
+
+		// Split at each opening tag whose class contains the target CSS class.
+		$pattern = '/(<[a-z][a-z0-9]*\s[^>]*class="[^"]*\b' . $css_class . '\b[^"]*"[^>]*>)/si';
+		$parts   = preg_split( $pattern, $html, -1, PREG_SPLIT_DELIM_CAPTURE );
+
+		if ( count( $parts ) <= 1 ) {
+			return $html;
+		}
+
+		$result = $parts[0];
+
+		for ( $i = 1, $len = count( $parts ); $i < $len; $i += 2 ) {
+			$tag   = $parts[ $i ];
+			$after = isset( $parts[ $i + 1 ] ) ? $parts[ $i + 1 ] : '';
+
+			// Already processed — skip.
+			if ( false !== strpos( $tag, 'ml-has-link' ) ) {
+				$result .= $tag . $after;
+				continue;
+			}
+
+			// Determine the URL.
+			$url = $static_url;
+
+			if ( empty( $url ) && $link_type ) {
+				// Look ahead for the first <a href="..."> after this opening tag.
+				if ( preg_match( '/<a\s[^>]*href="([^"]*)"/', $after, $m ) ) {
+					$url = $m[1];
+				}
+			}
+
+			if ( empty( $url ) ) {
+				$result .= $tag . $after;
+				continue;
+			}
+
+			// Add ml-has-link class to the opening tag.
+			$tag = preg_replace( '/class="([^"]*)"/', 'class="$1 ml-has-link"', $tag, 1 );
+
+			// Build the link overlay element.
+			$link_el = sprintf(
+				'<a class="ml-block-link" href="%s"%s%s aria-hidden="true" tabindex="-1"></a>',
+				esc_url( $url ),
+				$target_attr,
+				$rel_attr
+			);
+
+			$result .= $tag . $link_el . $after;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Register the dynamic term image block.
+	 */
+	public function register_term_image_block(): void {
+		register_block_type(
+			'ml/term-image',
+			array(
+				'api_version'     => 2,
+				'render_callback' => array( $this, 'render_term_image_block' ),
+				'attributes'      => array(
+					'taxonomy'         => array(
+						'type'    => 'string',
+						'default' => 'category',
+					),
+					'imageSize'        => array(
+						'type'    => 'string',
+						'default' => 'medium',
+					),
+					'linkToTerm'       => array(
+						'type'    => 'boolean',
+						'default' => false,
+					),
+					'aspectRatio'      => array(
+						'type'    => 'string',
+						'default' => 'auto',
+					),
+					'scale'            => array(
+						'type'    => 'string',
+						'default' => 'cover',
+					),
+					'fallbackImageId'  => array(
+						'type'    => 'number',
+						'default' => 0,
+					),
+					'fallbackImageUrl' => array(
+						'type'    => 'string',
+						'default' => '',
+					),
+				),
+				'supports'        => array(
+					'html'  => false,
+					'align' => array( 'left', 'center', 'right', 'wide', 'full' ),
+				),
+			)
+		);
+	}
+
+	/**
+	 * Render callback for the term image block.
+	 *
+	 * @param array     $attributes Block attributes.
+	 * @param string    $content    Block content.
+	 * @param \WP_Block $block      Parsed block instance.
+	 * @return string Rendered HTML.
+	 */
+	public function render_term_image_block( array $attributes, string $content, \WP_Block $block ): string {
+		unset( $content );
+
+		$aspect_ratio = isset( $attributes['aspectRatio'] ) && is_string( $attributes['aspectRatio'] )
+			? trim( $attributes['aspectRatio'] )
+			: 'auto';
+
+		if ( 'auto' !== $aspect_ratio && ! preg_match( '/^\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?$/', $aspect_ratio ) ) {
+			$aspect_ratio = 'auto';
+		}
+
+		$scale = isset( $attributes['scale'] ) && is_string( $attributes['scale'] )
+			? sanitize_key( $attributes['scale'] )
+			: 'cover';
+
+		if ( ! in_array( $scale, array( 'cover', 'contain', 'fill', 'none', 'scale-down' ), true ) ) {
+			$scale = 'cover';
+		}
+
+		$image_style_parts = array();
+		if ( 'auto' !== $aspect_ratio ) {
+			$image_style_parts[] = 'width:100%';
+			$image_style_parts[] = 'height:100%';
+		}
+		$image_style_parts[] = 'object-fit:' . $scale;
+
+		$image_style = implode( ';', $image_style_parts );
+
+		$wrapper_style = '';
+		if ( 'auto' !== $aspect_ratio ) {
+			$wrapper_style = 'aspect-ratio:' . $aspect_ratio;
+		}
+
+		$image_size = isset( $attributes['imageSize'] ) && is_string( $attributes['imageSize'] )
+			? sanitize_key( $attributes['imageSize'] )
+			: 'medium';
+
+		$fallback_image_id  = isset( $attributes['fallbackImageId'] ) ? absint( $attributes['fallbackImageId'] ) : 0;
+		$fallback_image_url = isset( $attributes['fallbackImageUrl'] ) && is_string( $attributes['fallbackImageUrl'] )
+			? esc_url_raw( $attributes['fallbackImageUrl'] )
+			: '';
+
+		$taxonomy = isset( $attributes['taxonomy'] ) && is_string( $attributes['taxonomy'] )
+			? sanitize_key( $attributes['taxonomy'] )
+			: 'category';
+
+		if ( ! taxonomy_exists( $taxonomy ) ) {
+			$taxonomy = 'category';
+		}
+
+		$term = null;
+
+		foreach ( array( 'termId', 'term_id', 'queriedTermId' ) as $term_context_key ) {
+			if ( isset( $block->context[ $term_context_key ] ) ) {
+				$term_id = absint( $block->context[ $term_context_key ] );
+				if ( $term_id ) {
+					$term_candidate = get_term( $term_id );
+					if ( $term_candidate instanceof \WP_Term ) {
+						$term = $term_candidate;
+						break;
+					}
+				}
+			}
+		}
+
+		if ( ! $term ) {
+			$post_id = 0;
+
+			if ( isset( $block->context['postId'] ) ) {
+				$post_id = absint( $block->context['postId'] );
+			}
+
+			if ( ! $post_id ) {
+				$post_id = get_the_ID() ? absint( get_the_ID() ) : 0;
+			}
+
+			if ( $post_id ) {
+				$terms = get_the_terms( $post_id, $taxonomy );
+				if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+					$term_candidate = reset( $terms );
+					if ( $term_candidate instanceof \WP_Term ) {
+						$term = $term_candidate;
+					}
+				}
+			}
+		}
+
+		$thumbnail_id = 0;
+		if ( $term instanceof \WP_Term ) {
+			$thumbnail_id = (int) get_term_meta( $term->term_id, 'thumbnail_id', true );
+		}
+
+		$image_html = '';
+		$image_alt  = $term instanceof \WP_Term ? $term->name : '';
+
+		if ( $thumbnail_id ) {
+			$image_html = wp_get_attachment_image(
+				$thumbnail_id,
+				$image_size,
+				false,
+				array(
+					'class' => 'wp-block-ml-term-image__image',
+					'alt'   => $image_alt,
+					'style' => $image_style,
+				)
+			);
+		} elseif ( $fallback_image_id ) {
+			$image_html = wp_get_attachment_image(
+				$fallback_image_id,
+				$image_size,
+				false,
+				array(
+					'class' => 'wp-block-ml-term-image__image',
+					'alt'   => $image_alt,
+					'style' => $image_style,
+				)
+			);
+		} elseif ( $fallback_image_url ) {
+			$image_html = sprintf(
+				'<img class="wp-block-ml-term-image__image" src="%1$s" alt="%2$s" style="%3$s" />',
+				esc_url( $fallback_image_url ),
+				esc_attr( $image_alt ),
+				esc_attr( $image_style )
+			);
+		}
+
+		if ( ! $image_html ) {
+			return '';
+		}
+
+		if ( ! empty( $attributes['linkToTerm'] ) && $term instanceof \WP_Term ) {
+			$term_link = get_term_link( $term );
+
+			if ( ! is_wp_error( $term_link ) && is_string( $term_link ) ) {
+				$image_html = sprintf(
+					'<a class="wp-block-ml-term-image__link" href="%s">%s</a>',
+					esc_url( $term_link ),
+					$image_html
+				);
+			}
+		}
+
+		$wrapper_args = array(
+			'class' => 'wp-block-ml-term-image',
+		);
+
+		if ( $wrapper_style ) {
+			$wrapper_args['style'] = $wrapper_style;
+		}
+
+		$wrapper_attributes = get_block_wrapper_attributes( $wrapper_args );
+
+		return sprintf( '<div %1$s>%2$s</div>', $wrapper_attributes, $image_html );
 	}
 }
 

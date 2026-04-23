@@ -11,12 +11,17 @@ export function getMobileSpacingClasses(attributes) {
     mlMobilePadding = {},
     mlMobileMargin = {},
     mlMobileFlexColumn = false,
+    mlMobileJustifyContent = "",
     mlMobileFlexBasis = "",
   } = attributes;
   const classes = [];
 
   if (mlMobileFlexColumn) {
     classes.push("has-mobile-flex-column");
+  }
+
+  if (mlMobileJustifyContent) {
+    classes.push(`has-mobile-justify-${mlMobileJustifyContent}`);
   }
 
   if (mlMobileFlexBasis) {

@@ -1,6 +1,7 @@
 import {
   InspectorControls,
   __experimentalSpacingSizesControl as SpacingSizesControl,
+  JustifyContentControl,
 } from "@wordpress/block-editor";
 import {
   PanelBody,
@@ -55,6 +56,7 @@ export default function MobileSpacingPanel({ attributes, setAttributes }) {
     mlMobilePadding = {},
     mlMobileMargin = {},
     mlMobileFlexColumn = false,
+    mlMobileJustifyContent = "",
     mlMobileFlexBasis = "",
     mlMobileBreakpoint = 0,
     mlCustomMargin = {},
@@ -95,6 +97,19 @@ export default function MobileSpacingPanel({ attributes, setAttributes }) {
           onChange={(value) => setAttributes({ mlMobileFlexColumn: value })}
           __nextHasNoMarginBottom
         />
+
+        <div style={{ marginBottom: "16px" }}>
+          <p style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", marginBottom: "8px" }}>
+            {__("Justify items", "ml-gutenberg-customizations")}
+          </p>
+          <JustifyContentControl
+            value={mlMobileJustifyContent}
+            onChange={(value) =>
+              setAttributes({ mlMobileJustifyContent: value ?? "" })
+            }
+            allowedControls={["left", "center", "right", "space-between"]}
+          />
+        </div>
 
         <UnitControl
           label={__("Mobile width (flex-basis)", "ml-gutenberg-customizations")}

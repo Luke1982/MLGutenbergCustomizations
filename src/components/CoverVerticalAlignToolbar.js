@@ -37,10 +37,7 @@ export default function CoverVerticalAlignToolbar({
       <ToolbarGroup>
         <ToolbarDropdownMenu
           icon={current?.icon || justifyCenterVertical}
-          label={__(
-            "Change vertical alignment",
-            "ml-gutenberg-customizations",
-          )}
+          label={__("Change vertical alignment", "ml-gutenberg-customizations")}
           controls={ALIGNMENTS.map(({ value, icon, title }) => ({
             icon,
             title,

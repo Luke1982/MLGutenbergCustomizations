@@ -37,6 +37,20 @@ $properties: ("padding", "margin");
     flex-direction: column !important;
 }
 
+// ── Justify content ──────────────────────────────────────────────────
+$justify-map: (
+    "left": flex-start,
+    "center": center,
+    "right": flex-end,
+    "space-between": space-between,
+);
+
+@each $name, $value in $justify-map {
+    .has-mobile-justify-#{$name} {
+        justify-content: #{$value} !important;
+    }
+}
+
 // ── Flex-basis (value set via inline CSS variable) ───────────────────
 .has-mobile-flex-basis {
     flex-basis: var(--ml-mobile-flex-basis) !important;

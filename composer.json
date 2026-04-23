@@ -6,7 +6,8 @@
 		"wp-coding-standards/wpcs": "^3.0",
 		"phpcompatibility/phpcompatibility-wp": "^2.1",
 		"dealerdirect/phpcodesniffer-composer-installer": "^1.0",
-		"php-stubs/wordpress-stubs": "^6.5"
+		"php-stubs/wordpress-stubs": "^6.5",
+		"phpunit/phpunit": "^9.6"
 	},
 	"config": {
 		"allow-plugins": {
@@ -14,6 +15,7 @@
 		}
 	},
 	"scripts": {
+		"test": "phpunit --configuration phpunit.xml.dist",
 		"phpcs": "phpcs",
 		"phpcbf": "phpcbf"
 	}

@@ -107,7 +107,13 @@ export default function MobileSpacingPanel({ attributes, setAttributes }) {
             onChange={(value) =>
               setAttributes({ mlMobileJustifyContent: value ?? "" })
             }
-            allowedControls={["left", "center", "right", "space-between"]}
+            allowedControls={[
+              "left",
+              "center",
+              "right",
+              "space-between",
+              "space-around",
+            ]}
           />
         </div>
 

@@ -43,6 +43,7 @@ $justify-map: (
     "center": center,
     "right": flex-end,
     "space-between": space-between,
+    "space-around": space-around,
 );
 
 @each $name, $value in $justify-map {

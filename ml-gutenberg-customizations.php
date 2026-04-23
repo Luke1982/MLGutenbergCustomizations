@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MajorLabel Gutenberg Customizations
  * Description: Custom margin and padding controls for mobile screens in the Gutenberg editor.
- * Version: 1.4.12
+ * Version: 1.4.14
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Text Domain: ml-gutenberg-customizations
@@ -37,7 +37,7 @@ class ML_Gutenberg_Customizations {
 		add_action( 'enqueue_block_assets', array( $this, 'enqueue_block_assets' ) );
 
 		foreach ( self::SUPPORTED_BLOCKS as $block ) {
-			add_filter( "render_block_{$block}", array( $this, 'add_mobile_spacing_classes' ), 10, 2 );
+			add_filter( "render_block_{$block}", array( $this, 'add_mobile_spacing_classes' ), 10, 3 );
 		}
 
 		// Fallback: catch inner blocks rendered by third-party plugins
@@ -136,18 +136,25 @@ class ML_Gutenberg_Customizations {
 	 * When a custom breakpoint is set on a block, inline CSS is output
 	 * inside a scoped @media query targeting that specific element.
 	 *
-	 * @param string $block_content The block's rendered HTML.
-	 * @param array  $block         The parsed block data.
+	 * @param string         $block_content The block's rendered HTML.
+	 * @param array          $block         The parsed block data.
+	 * @param \WP_Block|null $instance      Block instance with resolved context.
 	 * @return string Modified block HTML with mobile spacing classes.
 	 */
-	public function add_mobile_spacing_classes( string $block_content, array $block ): string {
+	public function add_mobile_spacing_classes( string $block_content, array $block, ?\WP_Block $instance = null ): string {
 		$attrs                     = $block['attrs'] ?? array();
+		$block_context             = ( $instance instanceof \WP_Block && is_array( $instance->context ) )
+			? $instance->context
+			: ( is_array( $block['context'] ?? null ) ? $block['context'] : array() );
 		$padding                   = is_array( $attrs['mlMobilePadding'] ?? null ) ? $attrs['mlMobilePadding'] : array();
 		$margin                    = is_array( $attrs['mlMobileMargin'] ?? null ) ? $attrs['mlMobileMargin'] : array();
 		$custom_margin             = is_array( $attrs['mlCustomMargin'] ?? null ) ? $attrs['mlCustomMargin'] : array();
 		$custom_margin_mobile_only = ! empty( $attrs['mlCustomMarginMobileOnly'] );
 		$custom_margin_override    = is_array( $attrs['mlCustomMarginMobileOverride'] ?? null ) ? $attrs['mlCustomMarginMobileOverride'] : array();
 		$flex_column               = ! empty( $attrs['mlMobileFlexColumn'] );
+		$justify_content           = isset( $attrs['mlMobileJustifyContent'] ) && '' !== $attrs['mlMobileJustifyContent']
+			? sanitize_key( $attrs['mlMobileJustifyContent'] )
+			: '';
 		$flex_basis                = isset( $attrs['mlMobileFlexBasis'] ) && '' !== $attrs['mlMobileFlexBasis']
 			? $attrs['mlMobileFlexBasis']
 			: '';
@@ -158,6 +165,12 @@ class ML_Gutenberg_Customizations {
 		$link_url                  = isset( $attrs['mlLinkUrl'] ) && '' !== $attrs['mlLinkUrl']
 			? $attrs['mlLinkUrl']
 			: '';
+		$link_type                 = isset( $attrs['mlLinkType'] ) && '' !== $attrs['mlLinkType']
+			? sanitize_key( $attrs['mlLinkType'] )
+			: '';
+		$link_taxonomy             = isset( $attrs['mlLinkTaxonomy'] ) && '' !== $attrs['mlLinkTaxonomy']
+			? sanitize_key( $attrs['mlLinkTaxonomy'] )
+			: 'category';
 		$link_target               = isset( $attrs['mlLinkTarget'] ) && '' !== $attrs['mlLinkTarget']
 			? $attrs['mlLinkTarget']
 			: '';
@@ -166,6 +179,65 @@ class ML_Gutenberg_Customizations {
 		$sides                     = array( 'top', 'right', 'bottom', 'left' );
 		$classes                   = array();
 		$inline_rules              = array();
+
+		if ( empty( $link_url ) && $link_type ) {
+			if ( 'post' === $link_type ) {
+				$post_id = isset( $block_context['postId'] ) ? absint( $block_context['postId'] ) : 0;
+
+				if ( ! $post_id ) {
+					$post_id = get_the_ID() ? absint( get_the_ID() ) : 0;
+				}
+
+				if ( $post_id ) {
+					$post_link = get_permalink( $post_id );
+					if ( is_string( $post_link ) ) {
+						$link_url = $post_link;
+					}
+				}
+			} elseif ( 'term' === $link_type ) {
+				$term = null;
+
+				foreach ( array( 'termId', 'term_id', 'queriedTermId' ) as $term_context_key ) {
+					if ( isset( $block_context[ $term_context_key ] ) ) {
+						$term_id = absint( $block_context[ $term_context_key ] );
+						if ( $term_id ) {
+							$term_candidate = taxonomy_exists( $link_taxonomy )
+								? get_term( $term_id, $link_taxonomy )
+								: get_term( $term_id );
+							if ( $term_candidate instanceof \WP_Term ) {
+								$term = $term_candidate;
+								break;
+							}
+						}
+					}
+				}
+
+				if ( ! $term ) {
+					$post_id = isset( $block_context['postId'] ) ? absint( $block_context['postId'] ) : 0;
+
+					if ( ! $post_id ) {
+						$post_id = get_the_ID() ? absint( get_the_ID() ) : 0;
+					}
+
+					if ( $post_id && taxonomy_exists( $link_taxonomy ) ) {
+						$terms = get_the_terms( $post_id, $link_taxonomy );
+						if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+							$term_candidate = reset( $terms );
+							if ( $term_candidate instanceof \WP_Term ) {
+								$term = $term_candidate;
+							}
+						}
+					}
+				}
+
+				if ( $term instanceof \WP_Term ) {
+					$term_link = get_term_link( $term );
+					if ( ! is_wp_error( $term_link ) && is_string( $term_link ) ) {
+						$link_url = $term_link;
+					}
+				}
+			}
+		}
 
 		// Custom margin — supports negative values.
 		$custom_margin_declarations = array();
@@ -177,6 +249,22 @@ class ML_Gutenberg_Customizations {
 
 		if ( $flex_column && ! $has_custom_bp ) {
 			$classes[] = 'has-mobile-flex-column';
+		}
+
+		$justify_map = array(
+			'left'          => 'flex-start',
+			'center'        => 'center',
+			'right'         => 'flex-end',
+			'space-between' => 'space-between',
+			'space-around'  => 'space-around',
+		);
+
+		if ( $justify_content && isset( $justify_map[ $justify_content ] ) ) {
+			if ( $has_custom_bp ) {
+				$inline_rules[] = 'justify-content:' . $justify_map[ $justify_content ] . ' !important';
+			} else {
+				$classes[] = sanitize_html_class( 'has-mobile-justify-' . $justify_content );
+			}
 		}
 
 		if ( $flex_basis && ! $has_custom_bp ) {

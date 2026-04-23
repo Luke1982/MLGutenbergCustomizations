@@ -1,12 +1,15 @@
 {
 	"name": "ml-gutenberg-customizations",
-	"version": "1.4.12",
+	"version": "1.4.14",
 	"description": "Custom margin and padding controls for mobile screens in the WordPress Gutenberg editor.",
 	"private": true,
 	"scripts": {
-		"build": "wp-scripts build && npm run zip",
+		"build": "npm run test && wp-scripts build && npm run zip",
 		"start": "wp-scripts start",
 		"zip": "rm -rf /tmp/ml-gutenberg-customizations && mkdir -p /tmp/ml-gutenberg-customizations && cp ml-gutenberg-customizations.php /tmp/ml-gutenberg-customizations/ && cp -r build /tmp/ml-gutenberg-customizations/ && cd /tmp && rm -f ml-gutenberg-customizations.zip && zip -r ml-gutenberg-customizations.zip ml-gutenberg-customizations/ -x 'ml-gutenberg-customizations/build/*.map' && mv ml-gutenberg-customizations.zip \"$OLDPWD/\" && rm -rf ml-gutenberg-customizations",
+		"test": "npm run test:js && npm run test:php",
+		"test:js": "wp-scripts test-unit-js --runInBand",
+		"test:php": "vendor/bin/phpunit --configuration phpunit.xml.dist",
 		"lint:js": "wp-scripts lint-js",
 		"lint:css": "wp-scripts lint-style"
 	},

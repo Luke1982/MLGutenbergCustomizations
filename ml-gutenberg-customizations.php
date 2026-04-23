@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MajorLabel Gutenberg Customizations
  * Description: Custom margin and padding controls for mobile screens in the Gutenberg editor.
- * Version: 1.4.10
+ * Version: 1.4.12
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Text Domain: ml-gutenberg-customizations
@@ -646,7 +646,26 @@ class ML_Gutenberg_Customizations {
 
 		$term = null;
 
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only term context for editor SSR preview.
+		$request_term_id       = isset( $_REQUEST['ml_term_id'] ) ? absint( wp_unslash( $_REQUEST['ml_term_id'] ) ) : 0;
+		$request_term_taxonomy = isset( $_REQUEST['ml_term_taxonomy'] ) ? sanitize_key( wp_unslash( $_REQUEST['ml_term_taxonomy'] ) ) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		if ( $request_term_id ) {
+			$term_candidate = $request_term_taxonomy
+				? get_term( $request_term_id, $request_term_taxonomy )
+				: get_term( $request_term_id );
+
+			if ( $term_candidate instanceof \WP_Term ) {
+				$term = $term_candidate;
+			}
+		}
+
 		foreach ( array( 'termId', 'term_id', 'queriedTermId' ) as $term_context_key ) {
+			if ( $term ) {
+				break;
+			}
+
 			if ( isset( $block->context[ $term_context_key ] ) ) {
 				$term_id = absint( $block->context[ $term_context_key ] );
 				if ( $term_id ) {

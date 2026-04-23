@@ -16,6 +16,7 @@ import {
   Placeholder,
   Spinner,
 } from "@wordpress/components";
+import ServerSideRender from "@wordpress/server-side-render";
 import { useSelect } from "@wordpress/data";
 import { store as coreDataStore } from "@wordpress/core-data";
 
@@ -375,7 +376,10 @@ registerBlockType("ml/term-image", {
                   value: "none",
                 },
                 {
-                  label: __("Link to term archive", "ml-gutenberg-customizations"),
+                  label: __(
+                    "Link to term archive",
+                    "ml-gutenberg-customizations",
+                  ),
                   value: "term",
                 },
               ]}
@@ -506,25 +510,33 @@ registerBlockType("ml/term-image", {
         </InspectorControls>
 
         <div {...blockProps}>
-          {!taxonomies.length && <Spinner />}
-          <Placeholder
-            icon="format-image"
-            label={__("Term Image", "ml-gutenberg-customizations")}
-            instructions={__(
-              "Outputs a term image from the current loop context.",
-              "ml-gutenberg-customizations",
-            )}
-          >
-            {context.postId || context.termId
-              ? __(
-                  "Preview is rendered on the frontend and in the site editor canvas.",
-                  "ml-gutenberg-customizations",
-                )
-              : __(
-                  "Place this block inside a loop template.",
-                  "ml-gutenberg-customizations",
-                )}
-          </Placeholder>
+              {!taxonomies.length && <Spinner />}
+              {context.postId || context.termId ?
+                <ServerSideRender
+                  block="ml/term-image"
+                  attributes={attributes}
+                  skipBlockSupportAttributes
+                  urlQueryArgs={{
+                    ml_term_id: context.termId || 0,
+                    ml_term_taxonomy: context.termTaxonomy || "",
+                    post_id: context.postId || 0,
+                  }}
+                />
+              :
+                <Placeholder
+                  icon="format-image"
+                  label={__("Term Image", "ml-gutenberg-customizations")}
+                  instructions={__(
+                    "Outputs a term image from the current loop context.",
+                    "ml-gutenberg-customizations",
+                  )}
+                >
+                  {__(
+                    "Place this block inside a loop template.",
+                    "ml-gutenberg-customizations",
+                  )}
+                </Placeholder>
+              }
         </div>
       </>
     );

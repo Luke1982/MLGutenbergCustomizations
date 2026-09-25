@@ -1215,7 +1215,7 @@ class ML_Gutenberg_Customizations {
 					continue;
 				}
 
-				$trimmed = trim( $text );
+				$trimmed = trim( (string) preg_replace( '/\s+/u', ' ', $text ) );
 				$trimmed = function_exists( 'mb_substr' ) ? mb_substr( $trimmed, 0, 200 ) : substr( $trimmed, 0, 200 );
 
 				if ( '' !== $trimmed ) {

@@ -31,7 +31,7 @@ export function normalizeTypewriter(raw) {
     enabled: !!stored.enabled,
     texts: texts
       .filter((text) => typeof text === "string")
-      .map((text) => text.trim().slice(0, MAX_LENGTH))
+      .map((text) => text.replace(/\s+/g, " ").trim().slice(0, MAX_LENGTH))
       .filter(Boolean)
       .slice(0, MAX_TEXTS),
     interval: clampTiming(stored.interval, "interval"),

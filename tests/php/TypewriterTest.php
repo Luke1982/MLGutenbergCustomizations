@@ -93,6 +93,19 @@ final class TypewriterTest extends TestCase {
 		$this->assertSame( array( 'Developers', 'Makers' ), $data['texts'] );
 	}
 
+	public function test_line_breaks_and_runs_of_whitespace_collapse(): void {
+		$data = $this->data(
+			$this->render(
+				array(
+					'enabled' => true,
+					'texts'   => array( "Wie kunnen er\n  helpen?", "a\t\tb" ),
+				)
+			)
+		);
+
+		$this->assertSame( array( 'Wie kunnen er helpen?', 'a b' ), $data['texts'] );
+	}
+
 	public function test_timings_are_clamped(): void {
 		$data = $this->data(
 			$this->render(

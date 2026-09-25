@@ -25,6 +25,12 @@ describe("normalizeTypewriter", () => {
     ).toEqual(["spaced", "kept"]);
   });
 
+  it("collapses line breaks and runs of whitespace into single spaces", () => {
+    expect(
+      normalizeTypewriter({ texts: ["Wie kunnen er\n  helpen?", "a\t\tb"] }).texts,
+    ).toEqual(["Wie kunnen er helpen?", "a b"]);
+  });
+
   it("ignores entries that are not text", () => {
     expect(normalizeTypewriter({ texts: ["kept", 42, null, {}] }).texts).toEqual(
       ["kept"],

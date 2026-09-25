@@ -3,7 +3,7 @@ import {
   PanelBody,
   Button,
   RangeControl,
-  TextControl,
+  TextareaControl,
   ToggleControl,
 } from "@wordpress/components";
 import { __, sprintf } from "@wordpress/i18n";
@@ -50,13 +50,14 @@ export default function TypewriterPanel({ attributes, setAttributes }) {
                   style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}
                 >
                   <div style={{ flex: "1 1 auto" }}>
-                    <TextControl
+                    <TextareaControl
                       label={sprintf(
                         /* translators: %d: position of the text in the cycle. */
                         __("Text %d", "ml-gutenberg-customizations"),
                         index + 2,
                       )}
                       value={text}
+                      rows={3}
                       onChange={(value) => updateText(index, value)}
                       __nextHasNoMarginBottom
                     />

@@ -53,6 +53,12 @@ class ML_Gutenberg_Customizations {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_transform_3d_styles' ) );
 		add_action( 'enqueue_block_assets', array( $this, 'enqueue_transform_3d_editor_styles' ) );
 
+		// Scroll reveal + scroll-linked effects, also on every block.
+		add_filter( 'register_block_type_args', array( $this, 'register_scroll_animation_attributes' ) );
+		add_filter( 'render_block', array( $this, 'apply_scroll_animation' ), 10, 2 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scroll_animation_assets' ) );
+		add_action( 'wp_head', array( $this, 'print_scroll_ready_class' ), 1 );
+
 	}
 
 	/**
@@ -819,6 +825,342 @@ class ML_Gutenberg_Customizations {
 			'ml-gutenberg-3d-transform-editor',
 			$this->get_transform_3d_css( '[data-block].ml-has-3d-transform', ' !important' )
 		);
+	}
+
+	/**
+	 * Reveal effects and what "amount" means for each: array( min, max, default ).
+	 * Mirrored in src/utils/scroll-effects.js — keep both in sync.
+	 */
+	private const REVEAL_AMOUNTS = array(
+		'fade'         => array( 0, 600, 40 ),
+		'slide-bottom' => array( 0, 600, 40 ),
+		'slide-top'    => array( 0, 600, 40 ),
+		'slide-left'   => array( 0, 600, 40 ),
+		'slide-right'  => array( 0, 600, 40 ),
+		'zoom-in'      => array( 0, 1, 0.2 ),
+		'zoom-out'     => array( 0, 1, 0.2 ),
+		'flip-x'       => array( 0, 180, 60 ),
+		'flip-y'       => array( 0, 180, 60 ),
+		'rotate'       => array( -180, 180, 15 ),
+		'blur'         => array( 0, 50, 8 ),
+		'wipe'         => array( 0, 600, 40 ),
+	);
+
+	/**
+	 * Easing curves the frontend engine knows.
+	 */
+	private const REVEAL_EASINGS = array( 'linear', 'ease-out', 'ease-in-out', 'back-out' );
+
+	/**
+	 * Scroll-linked amplitudes: array( min, max, default ).
+	 */
+	private const SCROLL_FX_RANGES = array(
+		'rotateX'     => array( -180, 180, 0 ),
+		'rotateY'     => array( -180, 180, 0 ),
+		'rotateZ'     => array( -180, 180, 0 ),
+		'translateX'  => array( -1000, 1000, 0 ),
+		'translateY'  => array( -1000, 1000, 0 ),
+		'scale'       => array( -1, 1, 0 ),
+		'opacity'     => array( 0, 1, 0 ),
+		'blur'        => array( 0, 50, 0 ),
+		'perspective' => array( 0, 3000, 1000 ),
+		'startOffset' => array( -100, 100, 0 ),
+		'endOffset'   => array( -100, 100, 0 ),
+		'smoothing'   => array( 0, 0.95, 0.15 ),
+	);
+
+	/**
+	 * Register the scroll animation attributes server-side on every block, so
+	 * ServerSideRender previews accept them.
+	 *
+	 * @param array $args Block type registration arguments.
+	 * @return array Arguments with both attributes added.
+	 */
+	public function register_scroll_animation_attributes( array $args ): array {
+		$args['attributes'] = is_array( $args['attributes'] ?? null ) ? $args['attributes'] : array();
+
+		$args['attributes']['mlScrollReveal'] = array( 'type' => 'object' );
+		$args['attributes']['mlScrollFx']     = array( 'type' => 'object' );
+
+		return $args;
+	}
+
+	/**
+	 * Clamp a stored number and keep whole values integral, so the JSON the
+	 * frontend reads carries 40 rather than 40.0.
+	 *
+	 * @param mixed $raw     Stored value.
+	 * @param float $min     Lowest allowed value.
+	 * @param float $max     Highest allowed value.
+	 * @param float $fallback Value to use when $raw is not a number.
+	 * @return int|float Clamped number.
+	 */
+	private function clamp_number( $raw, float $min, float $max, float $fallback ) {
+		$value = is_numeric( $raw ) && is_finite( (float) $raw ) ? (float) $raw : $fallback;
+		$value = round( max( $min, min( $max, $value ) ), 2 );
+
+		return (float) (int) $value === $value ? (int) $value : $value;
+	}
+
+	/**
+	 * Sanitize the mlScrollReveal attribute.
+	 *
+	 * Mirrors normalizeReveal() in src/utils/scroll-effects.js.
+	 *
+	 * @param array $raw Stored attribute.
+	 * @return array Settings for the frontend engine.
+	 */
+	private function normalize_reveal( array $raw ): array {
+		$effect                       = isset( $raw['effect'] ) && isset( self::REVEAL_AMOUNTS[ $raw['effect'] ] ) ? $raw['effect'] : 'fade';
+		list( $min, $max, $fallback ) = self::REVEAL_AMOUNTS[ $effect ];
+
+		return array(
+			'enabled'   => ! empty( $raw['enabled'] ),
+			'effect'    => $effect,
+			'amount'    => $this->clamp_number( $raw['amount'] ?? null, (float) $min, (float) $max, (float) $fallback ),
+			'duration'  => (int) $this->clamp_number( $raw['duration'] ?? null, 0, 5000, 600 ),
+			'delay'     => (int) $this->clamp_number( $raw['delay'] ?? null, 0, 5000, 0 ),
+			'easing'    => in_array( $raw['easing'] ?? '', self::REVEAL_EASINGS, true ) ? $raw['easing'] : 'ease-out',
+			'threshold' => $this->clamp_number( $raw['threshold'] ?? null, 0, 1, 0.15 ),
+			'offset'    => (int) $this->clamp_number( $raw['offset'] ?? null, -100, 100, 0 ),
+			'once'      => ! isset( $raw['once'] ) || ! empty( $raw['once'] ),
+			'fade'      => ! isset( $raw['fade'] ) || ! empty( $raw['fade'] ),
+			'stagger'   => (int) $this->clamp_number( $raw['stagger'] ?? null, 0, 1000, 0 ),
+		);
+	}
+
+	/**
+	 * Sanitize the mlScrollFx attribute.
+	 *
+	 * Mirrors normalizeScrollFx() in src/utils/scroll-effects.js.
+	 *
+	 * @param array $raw Stored attribute.
+	 * @return array Settings for the frontend engine.
+	 */
+	private function normalize_scroll_fx( array $raw ): array {
+		$settings = array( 'enabled' => ! empty( $raw['enabled'] ) );
+
+		foreach ( self::SCROLL_FX_RANGES as $key => $range ) {
+			list( $min, $max, $fallback ) = $range;
+
+			$settings[ $key ] = $this->clamp_number( $raw[ $key ] ?? null, (float) $min, (float) $max, (float) $fallback );
+		}
+
+		$settings['mode'] = in_array( $raw['mode'] ?? '', array( 'centered', 'progressive' ), true ) ? $raw['mode'] : 'centered';
+
+		return $settings;
+	}
+
+	/**
+	 * The visual state a revealing block starts from.
+	 *
+	 * Written as CSS custom properties so the start state is painted before
+	 * the frontend script runs — no flash of un-animated content — while the
+	 * engine takes over from there.
+	 *
+	 * Mirrors getRevealState( reveal, 0 ) in src/utils/scroll-effects.js.
+	 *
+	 * @param array $reveal Sanitized reveal settings.
+	 * @return array{transform: string, opacity: int, filter: string, clip: string} Start state.
+	 */
+	private function get_reveal_start_state( array $reveal ): array {
+		$amount      = (float) $reveal['amount'];
+		$translate_x = 0.0;
+		$translate_y = 0.0;
+		$rotate_x    = 0.0;
+		$rotate_y    = 0.0;
+		$rotate_z    = 0.0;
+		$scale       = 1.0;
+		$blur        = 0.0;
+		$clip        = -1.0;
+
+		switch ( $reveal['effect'] ) {
+			case 'slide-bottom':
+				$translate_y = $amount;
+				break;
+			case 'slide-top':
+				$translate_y = -$amount;
+				break;
+			case 'slide-left':
+				$translate_x = -$amount;
+				break;
+			case 'slide-right':
+				$translate_x = $amount;
+				break;
+			case 'zoom-in':
+				$scale = 1 - $amount;
+				break;
+			case 'zoom-out':
+				$scale = 1 + $amount;
+				break;
+			case 'flip-x':
+				$rotate_x = $amount;
+				break;
+			case 'flip-y':
+				$rotate_y = $amount;
+				break;
+			case 'rotate':
+				$rotate_z = $amount;
+				break;
+			case 'blur':
+				$blur = $amount;
+				break;
+			case 'wipe':
+				$clip = 100.0;
+				break;
+		}
+
+		$fmt   = static function ( float $n ): string {
+			$s = rtrim( rtrim( sprintf( '%.2F', $n ), '0' ), '.' );
+			return '-0' === $s ? '0' : $s;
+		};
+		$parts = array();
+
+		if ( 0.0 !== $rotate_x || 0.0 !== $rotate_y ) {
+			$parts[] = 'perspective(1000px)';
+		}
+		if ( 0.0 !== $translate_x || 0.0 !== $translate_y ) {
+			$parts[] = 'translate3d(' . $fmt( $translate_x ) . 'px, ' . $fmt( $translate_y ) . 'px, 0px)';
+		}
+		if ( 0.0 !== $rotate_x ) {
+			$parts[] = 'rotateX(' . $fmt( $rotate_x ) . 'deg)';
+		}
+		if ( 0.0 !== $rotate_y ) {
+			$parts[] = 'rotateY(' . $fmt( $rotate_y ) . 'deg)';
+		}
+		if ( 0.0 !== $rotate_z ) {
+			$parts[] = 'rotate(' . $fmt( $rotate_z ) . 'deg)';
+		}
+		if ( 1.0 !== $scale ) {
+			$parts[] = 'scale(' . $fmt( $scale ) . ')';
+		}
+
+		return array(
+			'transform' => implode( ' ', $parts ),
+			'opacity'   => $reveal['fade'] ? 0 : 1,
+			'filter'    => 0.0 !== $blur ? 'blur(' . $fmt( $blur ) . 'px)' : '',
+			'clip'      => $clip >= 0 ? 'inset(0% 0% ' . $fmt( $clip ) . '% 0%)' : '',
+		);
+	}
+
+	/**
+	 * Hand the scroll animation settings to the frontend engine.
+	 *
+	 * Settings travel as data attributes; the reveal start state travels as
+	 * CSS custom properties the stylesheet applies while the block waits.
+	 *
+	 * @param string $block_content The block's rendered HTML.
+	 * @param array  $block         The parsed block data.
+	 * @return string Modified block HTML.
+	 */
+	public function apply_scroll_animation( string $block_content, array $block ): string {
+		$attrs      = $block['attrs'] ?? array();
+		$raw_reveal = is_array( $attrs['mlScrollReveal'] ?? null ) ? $attrs['mlScrollReveal'] : array();
+		$raw_fx     = is_array( $attrs['mlScrollFx'] ?? null ) ? $attrs['mlScrollFx'] : array();
+
+		if ( empty( $raw_reveal['enabled'] ) && empty( $raw_fx['enabled'] ) ) {
+			return $block_content;
+		}
+
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
+
+		do {
+			if ( ! $processor->next_tag() ) {
+				return $block_content;
+			}
+		} while ( in_array( $processor->get_tag(), self::TRANSFORM_3D_SKIPPED_TAGS, true ) );
+
+		$classes      = array();
+		$declarations = array();
+
+		if ( ! empty( $raw_reveal['enabled'] ) ) {
+			$reveal    = $this->normalize_reveal( $raw_reveal );
+			$start     = $this->get_reveal_start_state( $reveal );
+			$classes[] = 'ml-reveal';
+
+			// With a stagger the children animate, so the stylesheet has to
+			// hide them instead of the container.
+			if ( $reveal['stagger'] > 0 ) {
+				$classes[] = 'ml-reveal-stagger';
+			}
+
+			if ( '' !== $start['transform'] ) {
+				$declarations[] = '--ml-reveal-from:' . $start['transform'];
+			}
+
+			$declarations[] = '--ml-reveal-opacity:' . $start['opacity'];
+
+			if ( '' !== $start['filter'] ) {
+				$declarations[] = '--ml-reveal-filter:' . $start['filter'];
+			}
+
+			if ( '' !== $start['clip'] ) {
+				$declarations[] = '--ml-reveal-clip:' . $start['clip'];
+			}
+
+			$processor->set_attribute( 'data-ml-reveal', wp_json_encode( $reveal ) );
+		}
+
+		if ( ! empty( $raw_fx['enabled'] ) ) {
+			$classes[] = 'ml-scroll-fx';
+			$processor->set_attribute( 'data-ml-scroll-fx', wp_json_encode( $this->normalize_scroll_fx( $raw_fx ) ) );
+		}
+
+		$existing_class = $processor->get_attribute( 'class' ) ?? '';
+		$processor->set_attribute( 'class', trim( $existing_class . ' ' . implode( ' ', $classes ) ) );
+
+		if ( ! empty( $declarations ) ) {
+			$existing_style = $processor->get_attribute( 'style' ) ?? '';
+			$decl           = implode( ';', $declarations );
+			$processor->set_attribute( 'style', $existing_style ? rtrim( $existing_style, ';' ) . ';' . $decl : $decl );
+		}
+
+		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Mark the document as script-capable.
+	 *
+	 * The stylesheet only hides a revealing block below this class, so the
+	 * content stays visible when JavaScript never runs.
+	 */
+	public function print_scroll_ready_class(): void {
+		wp_print_inline_script_tag(
+			"document.documentElement.classList.add('ml-scroll-ready');",
+			array( 'id' => 'ml-scroll-ready' )
+		);
+	}
+
+	/**
+	 * Enqueue the frontend scroll animation engine and its stylesheet.
+	 */
+	public function enqueue_scroll_animation_assets(): void {
+		$asset_file = plugin_dir_path( __FILE__ ) . 'build/scroll-effects.asset.php';
+
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+
+		$asset = include $asset_file;
+
+		wp_enqueue_script(
+			'ml-gutenberg-scroll-effects',
+			plugin_dir_url( __FILE__ ) . 'build/scroll-effects.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true // Load in footer.
+		);
+
+		$css_file = plugin_dir_path( __FILE__ ) . 'build/scroll-effects.css';
+
+		if ( file_exists( $css_file ) ) {
+			wp_enqueue_style(
+				'ml-gutenberg-scroll-effects',
+				plugin_dir_url( __FILE__ ) . 'build/scroll-effects.css',
+				array(),
+				filemtime( $css_file )
+			);
+		}
 	}
 
 	/**

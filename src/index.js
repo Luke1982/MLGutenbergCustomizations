@@ -27,6 +27,7 @@ import ScrollBehaviorPanel from "./components/ScrollBehaviorPanel";
 import LinkToolbar from "./components/LinkToolbar";
 import CoverVerticalAlignToolbar from "./components/CoverVerticalAlignToolbar";
 import Transform3dPanel from "./components/Transform3dPanel";
+import ScrollAnimationPanel from "./components/ScrollAnimationPanel";
 import {
   getMobileSpacingClasses,
   getCustomMarginCSS,
@@ -433,6 +434,63 @@ addFilter(
  * Register the scroll animation attributes on every block that has a
  * wrapper — the same blocks that can take a 3D transform.
  */
+addFilter(
+  "blocks.registerBlockType",
+  "ml-gutenberg-customizations/scroll-animation-attributes",
+  (settings) => {
+    if (!supportsTransform3d(settings)) {
+      return settings;
+    }
+
+    return {
+      ...settings,
+      attributes: {
+        ...settings.attributes,
+        mlScrollReveal: {
+          type: "object",
+          default: {},
+        },
+        mlScrollFx: {
+          type: "object",
+          default: {},
+        },
+      },
+    };
+  },
+);
+
+/**
+ * Inject the Scroll Reveal and Scroll Effects panels for the selected block.
+ * The animations themselves only run on the frontend; the panel's preview
+ * button plays a reveal on demand.
+ */
+const withScrollAnimationControls = createHigherOrderComponent((BlockEdit) => {
+  return (props) => {
+    if (!supportsTransform3d(getBlockType(props.name))) {
+      return <BlockEdit {...props} />;
+    }
+
+    return (
+      <>
+        <BlockEdit {...props} />
+        {props.isSelected && (
+          <ScrollAnimationPanel
+            attributes={props.attributes}
+            setAttributes={props.setAttributes}
+            clientId={props.clientId}
+          />
+        )}
+      </>
+    );
+  };
+}, "withScrollAnimationControls");
+
+addFilter(
+  "editor.BlockEdit",
+  "ml-gutenberg-customizations/scroll-animation-controls",
+  withScrollAnimationControls,
+);
+
 registerBlockType("ml/term-image", {
   title: __("Term Image", "ml-gutenberg-customizations"),
   description: __(

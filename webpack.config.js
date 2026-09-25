@@ -5,5 +5,6 @@ module.exports = {
   entry: {
     index: "./src/index.js",
     "scroll-behavior": "./src/scroll-behavior.js",
+    "scroll-effects": "./src/scroll-effects.js",
   },
 };

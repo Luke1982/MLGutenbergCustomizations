@@ -1,0 +1,35 @@
+// Start state for blocks waiting to be revealed.
+//
+// Everything here is scoped to .ml-scroll-ready, a class the plugin adds to
+// <html> from an inline script. Without JavaScript the class never appears,
+// so the content is never left hidden.
+//
+// The transform keeps the static 3D Transform value in front of the reveal
+// offset, so a block can use both features at once. When neither variable is
+// set the declaration resolves to nothing and the block simply sits still.
+
+.ml-scroll-ready {
+    .ml-reveal:not(.ml-reveal-stagger):not(.is-ml-revealed),
+    .ml-reveal-stagger:not(.is-ml-revealed)>* {
+        opacity: var(--ml-reveal-opacity, 0);
+        transform: var(--ml-3d-transform, ) var(--ml-reveal-from, );
+        filter: var(--ml-reveal-filter, none);
+        clip-path: var(--ml-reveal-clip, none);
+        will-change: transform, opacity;
+    }
+}
+
+// Reduced motion: show the final state immediately, no movement at all.
+@media (prefers-reduced-motion: reduce) {
+    .ml-scroll-ready {
+
+        .ml-reveal:not(.ml-reveal-stagger):not(.is-ml-revealed),
+        .ml-reveal-stagger:not(.is-ml-revealed)>* {
+            opacity: 1;
+            transform: var(--ml-3d-transform, );
+            filter: none;
+            clip-path: none;
+            will-change: auto;
+        }
+    }
+}

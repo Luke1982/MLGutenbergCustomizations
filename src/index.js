@@ -26,11 +26,16 @@ import VisibilityPanel from "./components/VisibilityPanel";
 import ScrollBehaviorPanel from "./components/ScrollBehaviorPanel";
 import LinkToolbar from "./components/LinkToolbar";
 import CoverVerticalAlignToolbar from "./components/CoverVerticalAlignToolbar";
+import Transform3dPanel from "./components/Transform3dPanel";
 import {
   getMobileSpacingClasses,
   getCustomMarginCSS,
   getHiddenOverlayCSS,
 } from "./utils/classes";
+import {
+  getTransform3dWrapperProps,
+  supportsTransform3d,
+} from "./utils/transform3d";
 
 import "./style.scss";
 
@@ -324,6 +329,110 @@ addFilter(
   withCoverVerticalAlignControls,
 );
 
+/**
+ * Register the 3D transform attribute on every block that has a wrapper.
+ * PHP registers it (without a default) on every block so ServerSideRender
+ * previews accept it; that server definition also reaches wrapper-less
+ * blocks such as core/html, which is harmless since they get no panel.
+ */
+addFilter(
+  "blocks.registerBlockType",
+  "ml-gutenberg-customizations/transform-3d-attribute",
+  (settings) => {
+    if (!supportsTransform3d(settings)) {
+      return settings;
+    }
+
+    return {
+      ...settings,
+      attributes: {
+        ...settings.attributes,
+        mlTransform3d: {
+          type: "object",
+          default: {},
+        },
+      },
+    };
+  },
+);
+
+/**
+ * Inject the 3D transform panel for the selected block.
+ * The fragment is kept while unselected so BlockEdit is never remounted.
+ */
+const withTransform3dControls = createHigherOrderComponent((BlockEdit) => {
+  return (props) => {
+    if (!supportsTransform3d(getBlockType(props.name))) {
+      return <BlockEdit {...props} />;
+    }
+
+    return (
+      <>
+        <BlockEdit {...props} />
+        {props.isSelected && (
+          <Transform3dPanel
+            attributes={props.attributes}
+            setAttributes={props.setAttributes}
+          />
+        )}
+      </>
+    );
+  };
+}, "withTransform3dControls");
+
+addFilter(
+  "editor.BlockEdit",
+  "ml-gutenberg-customizations/transform-3d-controls",
+  withTransform3dControls,
+);
+
+/**
+ * Live editor preview: put the frontend class and CSS variables on the
+ * block wrapper. Unlike a <style> next to the block, this adds no sibling
+ * element that would shift :nth-child layouts (e.g. gallery columns).
+ * wrapperProps (not className) keeps it composable with the
+ * mobile-spacing editor classes.
+ */
+const withTransform3dEditorWrapper = createHigherOrderComponent(
+  (BlockListBlock) => {
+    return (props) => {
+      const transform = getTransform3dWrapperProps(
+        props.attributes?.mlTransform3d,
+      );
+
+      if (!transform) {
+        return <BlockListBlock {...props} />;
+      }
+
+      const wrapperProps = props.wrapperProps || {};
+
+      return (
+        <BlockListBlock
+          {...props}
+          wrapperProps={{
+            ...wrapperProps,
+            className: [wrapperProps.className, transform.className]
+              .filter(Boolean)
+              .join(" "),
+            style: { ...wrapperProps.style, ...transform.style },
+          }}
+        />
+      );
+    };
+  },
+  "withTransform3dEditorWrapper",
+);
+
+addFilter(
+  "editor.BlockListBlock",
+  "ml-gutenberg-customizations/transform-3d-editor-wrapper",
+  withTransform3dEditorWrapper,
+);
+
+/**
+ * Register the scroll animation attributes on every block that has a
+ * wrapper — the same blocks that can take a 3D transform.
+ */
 registerBlockType("ml/term-image", {
   title: __("Term Image", "ml-gutenberg-customizations"),
   description: __(

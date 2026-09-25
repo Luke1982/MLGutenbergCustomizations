@@ -46,6 +46,13 @@ class ML_Gutenberg_Customizations {
 		add_filter( 'render_block', array( $this, 'process_parent_block_links' ), 20, 2 );
 
 		add_filter( 'render_block_core/cover', array( $this, 'apply_cover_vertical_align' ), 10, 2 );
+
+		// 3D transforms apply to every block, not only SUPPORTED_BLOCKS.
+		add_filter( 'register_block_type_args', array( $this, 'register_transform_3d_attribute' ) );
+		add_filter( 'render_block', array( $this, 'apply_transform_3d' ), 10, 2 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_transform_3d_styles' ) );
+		add_action( 'enqueue_block_assets', array( $this, 'enqueue_transform_3d_editor_styles' ) );
+
 	}
 
 	/**
@@ -541,6 +548,277 @@ class ML_Gutenberg_Customizations {
 		}
 
 		return $html;
+	}
+
+	/**
+	 * Slider ranges for mlTransform3d values: array( min, max, default ).
+	 * Mirrored in src/utils/transform3d.js — keep both in sync.
+	 */
+	private const TRANSFORM_3D_RANGES = array(
+		'perspective' => array( 0, 3000, 1000 ),
+		'rotateX'     => array( -180, 180, 0 ),
+		'rotateY'     => array( -180, 180, 0 ),
+		'rotateZ'     => array( -180, 180, 0 ),
+		'scale'       => array( 0, 3, 1 ),
+	);
+
+	/**
+	 * Translate units and their ranges: array( min, max ). CSS only allows a
+	 * percentage on translate X and Y; translateZ takes lengths.
+	 * Mirrored in src/utils/transform3d.js — keep both in sync.
+	 */
+	private const TRANSFORM_3D_TRANSLATE_UNITS = array(
+		'px'  => array( -2000, 2000 ),
+		'%'   => array( -500, 500 ),
+		'em'  => array( -100, 100 ),
+		'rem' => array( -100, 100 ),
+		'vw'  => array( -100, 100 ),
+		'vh'  => array( -100, 100 ),
+	);
+
+	/**
+	 * Allowed transform-origin values (the AlignmentMatrixControl cells).
+	 */
+	private const TRANSFORM_3D_ORIGINS = array(
+		'top left',
+		'top center',
+		'top right',
+		'center left',
+		'center center',
+		'center right',
+		'bottom left',
+		'bottom center',
+		'bottom right',
+	);
+
+	/**
+	 * Tags some blocks print before their wrapper (inline CSS, JSON-LD, …).
+	 * The transform goes on the first tag that is not one of these.
+	 */
+	private const TRANSFORM_3D_SKIPPED_TAGS = array( 'STYLE', 'SCRIPT', 'LINK', 'META' );
+
+	/**
+	 * Register the mlTransform3d attribute server-side on every block.
+	 *
+	 * Without this, blocks previewed through ServerSideRender (Archives,
+	 * RSS, Term Image, …) fail REST validation on the unknown attribute.
+	 *
+	 * @param array $args Block type registration arguments.
+	 * @return array Arguments with the mlTransform3d attribute added.
+	 */
+	public function register_transform_3d_attribute( array $args ): array {
+		$args['attributes']                  = is_array( $args['attributes'] ?? null ) ? $args['attributes'] : array();
+		$args['attributes']['mlTransform3d'] = array( 'type' => 'object' );
+
+		return $args;
+	}
+
+	/**
+	 * Apply the 3D transform to the block's root element.
+	 *
+	 * Outputs CSS custom properties plus a helper class instead of an inline
+	 * `transform`, so the frontend stylesheet owns the property. The scroll
+	 * behavior "slide" animation writes and then clears el.style.transform,
+	 * which would otherwise wipe an inline transform.
+	 *
+	 * @param string $block_content The block's rendered HTML.
+	 * @param array  $block         The parsed block data.
+	 * @return string Modified block HTML.
+	 */
+	public function apply_transform_3d( string $block_content, array $block ): string {
+		$transform = $block['attrs']['mlTransform3d'] ?? null;
+
+		if ( ! is_array( $transform ) ) {
+			return $block_content;
+		}
+
+		$value = $this->get_transform_3d_value( $transform );
+
+		if ( '' === $value ) {
+			return $block_content;
+		}
+
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
+
+		do {
+			if ( ! $processor->next_tag() ) {
+				return $block_content;
+			}
+		} while ( in_array( $processor->get_tag(), self::TRANSFORM_3D_SKIPPED_TAGS, true ) );
+
+		$origin = in_array( $transform['origin'] ?? '', self::TRANSFORM_3D_ORIGINS, true )
+			? $transform['origin']
+			: 'center center';
+
+		$classes = 'ml-has-3d-transform';
+		if ( ! empty( $transform['disableOnMobile'] ) ) {
+			$classes .= ' ml-3d-desktop-only';
+		}
+
+		$existing_class = $processor->get_attribute( 'class' ) ?? '';
+		$processor->set_attribute( 'class', trim( $existing_class . ' ' . $classes ) );
+
+		// Always output both variables so a nested transformed block never
+		// inherits its parent's origin.
+		$existing_style = $processor->get_attribute( 'style' ) ?? '';
+		$decl           = '--ml-3d-transform:' . $value . ';--ml-3d-origin:' . $origin;
+		$full_style     = $existing_style
+			? rtrim( $existing_style, ';' ) . ';' . $decl
+			: $decl;
+		$processor->set_attribute( 'style', $full_style );
+
+		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Build the CSS transform value from mlTransform3d values.
+	 *
+	 * Mirrors getTransform3dValue() in src/utils/transform3d.js. Returns an
+	 * empty string when the values would not move the element (perspective
+	 * alone does nothing without a transform to apply it to).
+	 *
+	 * @param array $transform The mlTransform3d attribute.
+	 * @return string CSS transform value.
+	 */
+	private function get_transform_3d_value( array $transform ): string {
+		$v = array();
+
+		foreach ( self::TRANSFORM_3D_RANGES as $key => list( $min, $max, $default ) ) {
+			$raw       = $transform[ $key ] ?? null;
+			$v[ $key ] = is_numeric( $raw ) && is_finite( (float) $raw )
+				? round( max( $min, min( $max, (float) $raw ) ), 2 )
+				: (float) $default;
+		}
+
+		// sprintf's %F ignores the locale; before PHP 8 a float cast to string
+		// follows LC_NUMERIC, which prints "1,5" under e.g. nl_NL.
+		$fmt = static function ( float $n ): string {
+			$s = rtrim( rtrim( sprintf( '%.2F', $n ), '0' ), '.' );
+			return '-0' === $s ? '0' : $s;
+		};
+		$css = array_map( $fmt, $v );
+
+		$functions = array();
+		$translate = array();
+		$has_move  = false;
+
+		foreach ( array( 'translateX', 'translateY', 'translateZ' ) as $axis ) {
+			list( $quantity, $unit ) = $this->parse_translate_3d( $transform[ $axis ] ?? null, $axis );
+
+			$translate[] = $fmt( $quantity ) . $unit;
+			$has_move    = $has_move || 0.0 !== $quantity;
+		}
+
+		if ( $has_move ) {
+			$functions[] = 'translate3d(' . implode( ', ', $translate ) . ')';
+		}
+
+		foreach ( array( 'rotateX', 'rotateY', 'rotateZ' ) as $axis ) {
+			if ( 0.0 !== $v[ $axis ] ) {
+				$functions[] = "{$axis}({$css[ $axis ]}deg)";
+			}
+		}
+
+		if ( 1.0 !== $v['scale'] ) {
+			$functions[] = "scale({$css['scale']})";
+		}
+
+		if ( empty( $functions ) ) {
+			return '';
+		}
+
+		if ( $v['perspective'] > 0 ) {
+			array_unshift( $functions, "perspective({$css['perspective']}px)" );
+		}
+
+		return implode( ' ', $functions );
+	}
+
+	/**
+	 * Parse a stored translate value ("50%", "-2em", or a plain number in px)
+	 * into array( quantity, unit ), clamped to the unit's range.
+	 *
+	 * Mirrors parseTranslate() in src/utils/transform3d.js. Invalid values
+	 * and units the axis does not allow become 0px.
+	 *
+	 * @param mixed  $raw  Stored value.
+	 * @param string $axis translateX, translateY or translateZ.
+	 * @return array{0: float, 1: string} Quantity and unit.
+	 */
+	private function parse_translate_3d( $raw, string $axis ): array {
+		$quantity = null;
+		$unit     = 'px';
+
+		if ( is_int( $raw ) || is_float( $raw ) ) {
+			$quantity = (float) $raw;
+		} elseif ( is_string( $raw ) && preg_match( '/^(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-z%]*)$/i', trim( $raw ), $m ) ) {
+			$quantity = (float) $m[1];
+			$unit     = '' === $m[2] ? 'px' : strtolower( $m[2] );
+		}
+
+		$allowed = isset( self::TRANSFORM_3D_TRANSLATE_UNITS[ $unit ] ) && ! ( 'translateZ' === $axis && '%' === $unit );
+
+		if ( null === $quantity || ! is_finite( $quantity ) || ! $allowed ) {
+			return array( 0.0, 'px' );
+		}
+
+		list( $min, $max ) = self::TRANSFORM_3D_TRANSLATE_UNITS[ $unit ];
+
+		return array( round( max( $min, min( $max, $quantity ) ), 2 ), $unit );
+	}
+
+	/**
+	 * Build the stylesheet that maps the --ml-3d-* variables to a transform
+	 * and resets desktop-only transforms below the mobile breakpoint.
+	 *
+	 * @param string $selector  Selector matching transformed elements.
+	 * @param string $important Either '' or ' !important'.
+	 * @return string CSS rules.
+	 */
+	private function get_transform_3d_css( string $selector, string $important ): string {
+		return sprintf(
+			'%1$s{transform:var(--ml-3d-transform)%2$s;transform-origin:var(--ml-3d-origin)%2$s}'
+			. '@media(max-width:%3$s){%1$s.ml-3d-desktop-only{transform:none%2$s}}',
+			$selector,
+			$important,
+			esc_attr( $this->get_mobile_breakpoint() )
+		);
+	}
+
+	/**
+	 * Enqueue the frontend stylesheet that applies 3D transforms.
+	 *
+	 * Frontend only: ServerSideRender previews in the editor also carry the
+	 * class, and would be transformed a second time inside their wrapper.
+	 */
+	public function enqueue_transform_3d_styles(): void {
+		wp_register_style( 'ml-gutenberg-3d-transform', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-3d-transform' );
+		wp_add_inline_style(
+			'ml-gutenberg-3d-transform',
+			$this->get_transform_3d_css( '.ml-has-3d-transform', '' )
+		);
+	}
+
+	/**
+	 * Enqueue the editor stylesheet for the 3D transform live preview.
+	 *
+	 * The editor puts the frontend class and variables on the block wrapper
+	 * (editor.BlockListBlock wrapperProps). Scoping to [data-block] leaves
+	 * ServerSideRender output inside the wrapper alone; !important matches
+	 * the other editor preview rules.
+	 */
+	public function enqueue_transform_3d_editor_styles(): void {
+		if ( ! is_admin() ) {
+			return;
+		}
+
+		wp_register_style( 'ml-gutenberg-3d-transform-editor', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-3d-transform-editor' );
+		wp_add_inline_style(
+			'ml-gutenberg-3d-transform-editor',
+			$this->get_transform_3d_css( '[data-block].ml-has-3d-transform', ' !important' )
+		);
 	}
 
 	/**

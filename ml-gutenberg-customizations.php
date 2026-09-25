@@ -59,6 +59,11 @@ class ML_Gutenberg_Customizations {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scroll_animation_assets' ) );
 		add_action( 'wp_head', array( $this, 'print_scroll_ready_class' ), 1 );
 
+		// Cycling text, paragraphs only.
+		add_filter( 'register_block_type_args', array( $this, 'register_typewriter_attribute' ), 10, 2 );
+		add_filter( 'render_block_core/paragraph', array( $this, 'apply_typewriter' ), 10, 2 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_typewriter_assets' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_typewriter_styles' ) );
 	}
 
 	/**
@@ -1161,6 +1166,157 @@ class ML_Gutenberg_Customizations {
 				filemtime( $css_file )
 			);
 		}
+	}
+
+	/**
+	 * Timing ranges for the cycling text: array( min, max, default ).
+	 * Mirrored in src/utils/typewriter.js — keep both in sync.
+	 */
+	private const TYPEWRITER_TIMINGS = array(
+		'interval'  => array( 200, 20000, 2500 ),
+		'typeSpeed' => array( 5, 500, 60 ),
+		'backSpeed' => array( 5, 500, 30 ),
+	);
+
+	/**
+	 * Register the cycling-text attribute, which only makes sense on a
+	 * paragraph.
+	 *
+	 * @param array  $args       Block type registration arguments.
+	 * @param string $block_type Name of the block being registered.
+	 * @return array Arguments, with the attribute added for paragraphs.
+	 */
+	public function register_typewriter_attribute( array $args, string $block_type ): array {
+		if ( 'core/paragraph' !== $block_type ) {
+			return $args;
+		}
+
+		$args['attributes'] = is_array( $args['attributes'] ?? null ) ? $args['attributes'] : array();
+
+		$args['attributes']['mlTypewriter'] = array( 'type' => 'object' );
+
+		return $args;
+	}
+
+	/**
+	 * Sanitize the mlTypewriter attribute.
+	 *
+	 * Mirrors normalizeTypewriter() in src/utils/typewriter.js.
+	 *
+	 * @param array $raw Stored attribute.
+	 * @return array Settings for the frontend script.
+	 */
+	private function normalize_typewriter( array $raw ): array {
+		$texts = array();
+
+		if ( isset( $raw['texts'] ) && is_array( $raw['texts'] ) ) {
+			foreach ( $raw['texts'] as $text ) {
+				if ( ! is_string( $text ) ) {
+					continue;
+				}
+
+				$trimmed = trim( $text );
+				$trimmed = function_exists( 'mb_substr' ) ? mb_substr( $trimmed, 0, 200 ) : substr( $trimmed, 0, 200 );
+
+				if ( '' !== $trimmed ) {
+					$texts[] = $trimmed;
+				}
+
+				if ( count( $texts ) >= 20 ) {
+					break;
+				}
+			}
+		}
+
+		$settings = array(
+			'enabled' => ! empty( $raw['enabled'] ),
+			'texts'   => $texts,
+		);
+
+		foreach ( self::TYPEWRITER_TIMINGS as $key => $range ) {
+			list( $min, $max, $fallback ) = $range;
+
+			$settings[ $key ] = (int) $this->clamp_number( $raw[ $key ] ?? null, (float) $min, (float) $max, (float) $fallback );
+		}
+
+		$settings['cursor'] = ! isset( $raw['cursor'] ) || ! empty( $raw['cursor'] );
+
+		return $settings;
+	}
+
+	/**
+	 * Hand a paragraph's extra texts to the frontend script.
+	 *
+	 * The paragraph keeps its own text in the markup — that is the first line
+	 * of the cycle, and what search engines and visitors without JavaScript
+	 * see — so at least one more text is needed before anything rotates.
+	 *
+	 * @param string $block_content The block's rendered HTML.
+	 * @param array  $block         The parsed block data.
+	 * @return string Modified block HTML.
+	 */
+	public function apply_typewriter( string $block_content, array $block ): string {
+		$raw = is_array( $block['attrs']['mlTypewriter'] ?? null ) ? $block['attrs']['mlTypewriter'] : array();
+
+		if ( empty( $raw['enabled'] ) ) {
+			return $block_content;
+		}
+
+		$settings = $this->normalize_typewriter( $raw );
+
+		if ( empty( $settings['texts'] ) ) {
+			return $block_content;
+		}
+
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
+
+		do {
+			if ( ! $processor->next_tag() ) {
+				return $block_content;
+			}
+		} while ( in_array( $processor->get_tag(), self::TRANSFORM_3D_SKIPPED_TAGS, true ) );
+
+		$existing_class = $processor->get_attribute( 'class' ) ?? '';
+
+		$processor->set_attribute( 'class', trim( $existing_class . ' ml-typewriter' ) );
+		$processor->set_attribute( 'data-ml-typewriter', wp_json_encode( $settings ) );
+
+		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Enqueue the frontend script that types the texts.
+	 */
+	public function enqueue_typewriter_assets(): void {
+		$asset_file = plugin_dir_path( __FILE__ ) . 'build/typewriter.asset.php';
+
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+
+		$asset = include $asset_file;
+
+		wp_enqueue_script(
+			'ml-gutenberg-typewriter',
+			plugin_dir_url( __FILE__ ) . 'build/typewriter.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true // Load in footer.
+		);
+	}
+
+	/**
+	 * Enqueue the blinking cursor styles.
+	 */
+	public function enqueue_typewriter_styles(): void {
+		wp_register_style( 'ml-gutenberg-typewriter', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-typewriter' );
+		wp_add_inline_style(
+			'ml-gutenberg-typewriter',
+			'.ml-typewriter-cursor{display:inline-block;width:2px;height:1em;vertical-align:-0.1em;margin-left:.08em;background:currentColor;animation:ml-typewriter-blink 1.05s steps(2,start) infinite}'
+			. '@keyframes ml-typewriter-blink{to{visibility:hidden}}'
+			. '@media(prefers-reduced-motion:reduce){.ml-typewriter-cursor{animation:none}}'
+		);
 	}
 
 	/**

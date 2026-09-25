@@ -28,6 +28,7 @@ import LinkToolbar from "./components/LinkToolbar";
 import CoverVerticalAlignToolbar from "./components/CoverVerticalAlignToolbar";
 import Transform3dPanel from "./components/Transform3dPanel";
 import ScrollAnimationPanel from "./components/ScrollAnimationPanel";
+import TypewriterPanel from "./components/TypewriterPanel";
 import {
   getMobileSpacingClasses,
   getCustomMarginCSS,
@@ -489,6 +490,56 @@ addFilter(
   "editor.BlockEdit",
   "ml-gutenberg-customizations/scroll-animation-controls",
   withScrollAnimationControls,
+);
+
+/**
+ * Cycling text only applies to paragraphs.
+ */
+addFilter(
+  "blocks.registerBlockType",
+  "ml-gutenberg-customizations/typewriter-attribute",
+  (settings, name) => {
+    if (name !== "core/paragraph") {
+      return settings;
+    }
+
+    return {
+      ...settings,
+      attributes: {
+        ...settings.attributes,
+        mlTypewriter: {
+          type: "object",
+          default: {},
+        },
+      },
+    };
+  },
+);
+
+const withTypewriterControls = createHigherOrderComponent((BlockEdit) => {
+  return (props) => {
+    if (props.name !== "core/paragraph") {
+      return <BlockEdit {...props} />;
+    }
+
+    return (
+      <>
+        <BlockEdit {...props} />
+        {props.isSelected && (
+          <TypewriterPanel
+            attributes={props.attributes}
+            setAttributes={props.setAttributes}
+          />
+        )}
+      </>
+    );
+  };
+}, "withTypewriterControls");
+
+addFilter(
+  "editor.BlockEdit",
+  "ml-gutenberg-customizations/typewriter-controls",
+  withTypewriterControls,
 );
 
 registerBlockType("ml/term-image", {

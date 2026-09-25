@@ -6,5 +6,6 @@ module.exports = {
     index: "./src/index.js",
     "scroll-behavior": "./src/scroll-behavior.js",
     "scroll-effects": "./src/scroll-effects.js",
+    typewriter: "./src/typewriter.js",
   },
 };

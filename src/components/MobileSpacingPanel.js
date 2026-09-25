@@ -9,7 +9,16 @@ import {
   RangeControl,
   __experimentalBoxControl as BoxControl,
   __experimentalUnitControl as UnitControl,
+  ToggleGroupControl as StableToggleGroupControl,
+  ToggleGroupControlOption as StableToggleGroupControlOption,
+  __experimentalToggleGroupControl as ExperimentalToggleGroupControl,
+  __experimentalToggleGroupControlOption as ExperimentalToggleGroupControlOption,
 } from "@wordpress/components";
+
+const ToggleGroupControl =
+  StableToggleGroupControl ?? ExperimentalToggleGroupControl;
+const ToggleGroupControlOption =
+  StableToggleGroupControlOption ?? ExperimentalToggleGroupControlOption;
 import { __, sprintf } from "@wordpress/i18n";
 
 const SIDES = ["top", "right", "bottom", "left"];
@@ -56,6 +65,7 @@ export default function MobileSpacingPanel({ attributes, setAttributes }) {
     mlMobilePadding = {},
     mlMobileMargin = {},
     mlMobileFlexColumn = false,
+    mlVisibility = "all",
     mlMobileJustifyContent = "",
     mlMobileFlexBasis = "",
     mlMobileBreakpoint = 0,
@@ -98,8 +108,36 @@ export default function MobileSpacingPanel({ attributes, setAttributes }) {
           __nextHasNoMarginBottom
         />
 
+        <ToggleGroupControl
+          label={__("Visibility", "ml-gutenberg-customizations")}
+          value={mlVisibility}
+          onChange={(value) => setAttributes({ mlVisibility: value ?? "all" })}
+          isBlock
+          __nextHasNoMarginBottom
+        >
+          <ToggleGroupControlOption
+            value="all"
+            label={__("All", "ml-gutenberg-customizations")}
+          />
+          <ToggleGroupControlOption
+            value="mobile-only"
+            label={__("Mobile only", "ml-gutenberg-customizations")}
+          />
+          <ToggleGroupControlOption
+            value="desktop-only"
+            label={__("Desktop only", "ml-gutenberg-customizations")}
+          />
+        </ToggleGroupControl>
+
         <div style={{ marginBottom: "16px" }}>
-          <p style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", marginBottom: "8px" }}>
+          <p
+            style={{
+              fontSize: "11px",
+              fontWeight: 500,
+              textTransform: "uppercase",
+              marginBottom: "8px",
+            }}
+          >
             {__("Justify items", "ml-gutenberg-customizations")}
           </p>
           <JustifyContentControl

@@ -37,7 +37,7 @@ class ML_Gutenberg_Customizations {
 		add_action( 'enqueue_block_assets', array( $this, 'enqueue_block_assets' ) );
 
 		foreach ( self::SUPPORTED_BLOCKS as $block ) {
-			add_filter( "render_block_{$block}", array( $this, 'add_mobile_spacing_classes' ), 10, 3 );
+			add_filter( "render_block_{$block}", array( $this, 'apply_block_customizations' ), 10, 3 );
 		}
 
 		// Fallback: catch inner blocks rendered by third-party plugins
@@ -130,18 +130,20 @@ class ML_Gutenberg_Customizations {
 	/**
 	 * Inject mobile spacing classes into the rendered block markup.
 	 *
-	 * Uses WP_HTML_Tag_Processor (WP 6.2+) so the classes are added at
+	 * Uses WP_HTML_Tag_Processor (WP 6.2+) so the changes are applied at
 	 * render time — no block-validation errors if the plugin is removed.
 	 *
+	 * Handles: mobile spacing, visibility (mobile-only / desktop-only),
+	 * custom margins, min-width, full hidden state, and link overlays.
 	 * When a custom breakpoint is set on a block, inline CSS is output
 	 * inside a scoped @media query targeting that specific element.
 	 *
 	 * @param string         $block_content The block's rendered HTML.
 	 * @param array          $block         The parsed block data.
 	 * @param \WP_Block|null $instance      Block instance with resolved context.
-	 * @return string Modified block HTML with mobile spacing classes.
+	 * @return string Modified block HTML.
 	 */
-	public function add_mobile_spacing_classes( string $block_content, array $block, ?\WP_Block $instance = null ): string {
+	public function apply_block_customizations( string $block_content, array $block, ?\WP_Block $instance = null ): string {
 		$attrs                     = $block['attrs'] ?? array();
 		$block_context             = ( $instance instanceof \WP_Block && is_array( $instance->context ) )
 			? $instance->context
@@ -162,6 +164,11 @@ class ML_Gutenberg_Customizations {
 			? $attrs['mlCustomMinWidth']
 			: '';
 		$is_hidden                 = ! empty( $attrs['mlHidden'] );
+		$visibility                = isset( $attrs['mlVisibility'] ) && '' !== $attrs['mlVisibility']
+			? sanitize_key( $attrs['mlVisibility'] )
+			: 'all';
+		$is_mobile_hidden          = 'desktop-only' === $visibility;
+		$is_mobile_only            = 'mobile-only' === $visibility;
 		$link_url                  = isset( $attrs['mlLinkUrl'] ) && '' !== $attrs['mlLinkUrl']
 			? $attrs['mlLinkUrl']
 			: '';
@@ -304,17 +311,48 @@ class ML_Gutenberg_Customizations {
 			$inline_rules[] = 'flex-basis:' . esc_attr( $flex_basis ) . ' !important';
 		}
 
-		if ( empty( $classes ) && empty( $inline_rules ) && empty( $custom_margin_declarations ) && empty( $flex_basis ) && empty( $custom_min_width ) && ! $is_hidden && empty( $link_url ) ) {
+		if ( empty( $classes ) && empty( $inline_rules ) && empty( $custom_margin_declarations ) && empty( $flex_basis ) && empty( $custom_min_width ) && ! $is_hidden && 'all' === $visibility && empty( $link_url ) && ! $has_scroll ) {
 			return $block_content;
 		}
 
-		// Generate a unique scoped class when we need inline CSS.
+		// Initialize inline style before any usage.
 		$inline_style = '';
 		$scoped_class = '';
 
+		if ( $is_mobile_hidden ) {
+			if ( $has_custom_bp ) {
+				$inline_rules[] = 'display:none !important';
+			} else {
+				// Generate inline CSS with media query for the global breakpoint
+				$bp            = (int) $this->get_mobile_breakpoint();
+				$scoped_class  = 'ml-mobile-' . substr( md5( wp_json_encode( $attrs ) . $block_content ), 0, 8 );
+				$classes[]     = $scoped_class;
+				$inline_style .= sprintf(
+					'<style>@media(max-width:%dpx){.%s{display:none !important}}</style>',
+					$bp,
+					$scoped_class
+				);
+			}
+		}
+
+		if ( $is_mobile_only ) {
+			$bp            = $has_custom_bp ? $custom_bp : (int) $this->get_mobile_breakpoint();
+			$scoped_class  = 'ml-mobile-' . substr( md5( wp_json_encode( $attrs ) . $block_content ), 0, 8 );
+			$classes[]     = $scoped_class;
+			$inline_style .= sprintf(
+				'<style>.%s{display:none !important}@media(max-width:%dpx){.%s{display:revert !important}}</style>',
+				$scoped_class,
+				$bp,
+				$scoped_class
+			);
+		}
+
 		if ( ! empty( $inline_rules ) || ( ! empty( $custom_margin_declarations ) && $custom_margin_mobile_only ) ) {
-			$scoped_class = 'ml-mobile-' . substr( md5( wp_json_encode( $attrs ) . $block_content ), 0, 8 );
-			$classes[]    = $scoped_class;
+			// Only regenerate scoped_class if not already set by mobile hidden.
+			if ( empty( $scoped_class ) ) {
+				$scoped_class = 'ml-mobile-' . substr( md5( wp_json_encode( $attrs ) . $block_content ), 0, 8 );
+			}
+			$classes[] = $scoped_class;
 		}
 
 		if ( ! empty( $inline_rules ) ) {

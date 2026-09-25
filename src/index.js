@@ -1,7 +1,8 @@
 import { addFilter } from "@wordpress/hooks";
 import { createHigherOrderComponent } from "@wordpress/compose";
-import { registerBlockType } from "@wordpress/blocks";
+import { registerBlockType, getBlockType } from "@wordpress/blocks";
 import { __ } from "@wordpress/i18n";
+import { useEffect } from "@wordpress/element";
 import {
   InspectorControls,
   MediaUpload,
@@ -94,6 +95,10 @@ addFilter(
           type: "string",
           default: "",
         },
+        mlVisibility: {
+          type: "string",
+          default: "all",
+        },
         mlHidden: {
           type: "boolean",
           default: false,
@@ -130,6 +135,54 @@ const withMobileSpacingControls = createHigherOrderComponent((BlockEdit) => {
 
     const customCSS = getCustomMarginCSS(props.attributes, props.clientId);
     const hiddenCSS = getHiddenOverlayCSS(props.attributes, props.clientId);
+    const { mlVisibility = "all" } = props.attributes;
+    const { clientId } = props;
+
+    // Inject a scoped <style> into the main document <head> so the badge
+    // CSS reaches the list view (which lives outside the canvas iframe).
+    // window.parent === window in the post editor (no iframe), so this
+    // works in both editors without cross-origin issues.
+    useEffect(() => {
+      const mobilePath =
+        "M15 4H9c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm.5" +
+        " 14c0 .3-.2.5-.5.5H9c-.3 0-.5-.2-.5-.5V6c0-.3.2-.5.5-.5h6c.3 0 .5.2.5.5v12zm-4.5-.5h2V16h-2v1.5z";
+      const desktopPath =
+        "M20.5 16h-.7V8c0-1.1-.9-2-2-2H6.2c-1.1 0-2 .9-2 2v8h-.7c-.8 0-1.5.7-1.5 1.5h20" +
+        "c0-.8-.7-1.5-1.5-1.5zM5.7 8c0-.3.2-.5.5-.5h11.6c.3 0 .5.2.5.5v7.6H5.7V8z";
+
+      const svgPath =
+        mlVisibility === "mobile-only"
+          ? mobilePath
+          : mlVisibility === "desktop-only"
+          ? desktopPath
+          : null;
+
+      const mainDoc = window.parent?.document ?? document;
+      const styleId = `ml-visibility-badge-${clientId}`;
+
+      mainDoc.getElementById(styleId)?.remove();
+
+      if (!svgPath) return;
+
+      const svgUri =
+        'url("data:image/svg+xml,' +
+        encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#1e1e1e" d="${svgPath}"/></svg>`,
+        ) +
+        '")';
+
+      const styleEl = mainDoc.createElement("style");
+      styleEl.id = styleId;
+      styleEl.textContent =
+        `[data-block="${clientId}"] .block-editor-list-view-block__contents-cell{position:relative;}` +
+        `[data-block="${clientId}"] .block-editor-list-view-block__contents-cell::after` +
+        `{content:"";display:block;position:absolute;right:8px;top:50%;transform:translateY(-50%);width:16px;height:16px;background:${svgUri} no-repeat center/contain;pointer-events:none;}`;
+      mainDoc.head.appendChild(styleEl);
+
+      return () => {
+        mainDoc.getElementById(styleId)?.remove();
+      };
+    }, [clientId, mlVisibility]);
 
     return (
       <>
@@ -510,33 +563,33 @@ registerBlockType("ml/term-image", {
         </InspectorControls>
 
         <div {...blockProps}>
-              {!taxonomies.length && <Spinner />}
-              {context.postId || context.termId ?
-                <ServerSideRender
-                  block="ml/term-image"
-                  attributes={attributes}
-                  skipBlockSupportAttributes
-                  urlQueryArgs={{
-                    ml_term_id: context.termId || 0,
-                    ml_term_taxonomy: context.termTaxonomy || "",
-                    post_id: context.postId || 0,
-                  }}
-                />
-              :
-                <Placeholder
-                  icon="format-image"
-                  label={__("Term Image", "ml-gutenberg-customizations")}
-                  instructions={__(
-                    "Outputs a term image from the current loop context.",
-                    "ml-gutenberg-customizations",
-                  )}
-                >
-                  {__(
-                    "Place this block inside a loop template.",
-                    "ml-gutenberg-customizations",
-                  )}
-                </Placeholder>
-              }
+          {!taxonomies.length && <Spinner />}
+          {context.postId || context.termId ? (
+            <ServerSideRender
+              block="ml/term-image"
+              attributes={attributes}
+              skipBlockSupportAttributes
+              urlQueryArgs={{
+                ml_term_id: context.termId || 0,
+                ml_term_taxonomy: context.termTaxonomy || "",
+                post_id: context.postId || 0,
+              }}
+            />
+          ) : (
+            <Placeholder
+              icon="format-image"
+              label={__("Term Image", "ml-gutenberg-customizations")}
+              instructions={__(
+                "Outputs a term image from the current loop context.",
+                "ml-gutenberg-customizations",
+              )}
+            >
+              {__(
+                "Place this block inside a loop template.",
+                "ml-gutenberg-customizations",
+              )}
+            </Placeholder>
+          )}
         </div>
       </>
     );

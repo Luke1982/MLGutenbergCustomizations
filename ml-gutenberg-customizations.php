@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MajorLabel Gutenberg Customizations
  * Description: Custom margin and padding controls for mobile screens in the Gutenberg editor.
- * Version: 1.4.14
+ * Version: 1.7.0
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Text Domain: ml-gutenberg-customizations

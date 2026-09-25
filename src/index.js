@@ -23,6 +23,7 @@ import { store as coreDataStore } from "@wordpress/core-data";
 
 import MobileSpacingPanel from "./components/MobileSpacingPanel";
 import VisibilityPanel from "./components/VisibilityPanel";
+import ScrollBehaviorPanel from "./components/ScrollBehaviorPanel";
 import LinkToolbar from "./components/LinkToolbar";
 import CoverVerticalAlignToolbar from "./components/CoverVerticalAlignToolbar";
 import {
@@ -119,6 +120,19 @@ addFilter(
           type: "string",
           default: "category",
         },
+        mlScrollBehavior: {
+          type: "object",
+          default: {
+            enabled: false,
+            mode: "offset",
+            offset: 100,
+            hideOnExceed: true,
+            animation: "fade",
+            enableOnMobile: true,
+            enableOnDesktop: true,
+            directionHideOn: "down",
+          },
+        },
       },
     };
   },
@@ -192,6 +206,10 @@ const withMobileSpacingControls = createHigherOrderComponent((BlockEdit) => {
           setAttributes={props.setAttributes}
         />
         <VisibilityPanel
+          attributes={props.attributes}
+          setAttributes={props.setAttributes}
+        />
+        <ScrollBehaviorPanel
           attributes={props.attributes}
           setAttributes={props.setAttributes}
         />

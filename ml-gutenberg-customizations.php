@@ -35,6 +35,7 @@ class ML_Gutenberg_Customizations {
 		add_action( 'init', array( $this, 'register_term_image_block' ) );
 		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_editor_assets' ) );
 		add_action( 'enqueue_block_assets', array( $this, 'enqueue_block_assets' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_assets' ) );
 
 		foreach ( self::SUPPORTED_BLOCKS as $block ) {
 			add_filter( "render_block_{$block}", array( $this, 'apply_block_customizations' ), 10, 3 );
@@ -128,7 +129,39 @@ class ML_Gutenberg_Customizations {
 	}
 
 	/**
-	 * Inject mobile spacing classes into the rendered block markup.
+	 * Enqueue the frontend scroll-behavior script.
+	 *
+	 * Registered separately from block assets so it only loads on the
+	 * frontend (not inside the block editor) and in the footer.
+	 */
+	public function enqueue_frontend_assets(): void {
+		$asset_file = plugin_dir_path( __FILE__ ) . 'build/scroll-behavior.asset.php';
+
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+
+		$asset = include $asset_file;
+
+		wp_enqueue_script(
+			'ml-gutenberg-scroll-behavior',
+			plugin_dir_url( __FILE__ ) . 'build/scroll-behavior.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true // Load in footer.
+		);
+
+		wp_localize_script(
+			'ml-gutenberg-scroll-behavior',
+			'mlScrollBehavior',
+			array(
+				'mobileBreakpoint' => $this->get_mobile_breakpoint(),
+			)
+		);
+	}
+
+	/**
+	 * Apply block customizations to the rendered block markup.
 	 *
 	 * Uses WP_HTML_Tag_Processor (WP 6.2+) so the changes are applied at
 	 * render time — no block-validation errors if the plugin is removed.
@@ -183,6 +216,8 @@ class ML_Gutenberg_Customizations {
 			: '';
 		$custom_bp                 = isset( $attrs['mlMobileBreakpoint'] ) ? absint( $attrs['mlMobileBreakpoint'] ) : 0;
 		$has_custom_bp             = $custom_bp > 0;
+		$scroll_behavior           = is_array( $attrs['mlScrollBehavior'] ?? null ) ? $attrs['mlScrollBehavior'] : array();
+		$has_scroll                = ! empty( $scroll_behavior['enabled'] );
 		$sides                     = array( 'top', 'right', 'bottom', 'left' );
 		$classes                   = array();
 		$inline_rules              = array();
@@ -440,6 +475,38 @@ class ML_Gutenberg_Customizations {
 					? rtrim( $existing_style, ';' ) . ';' . $hidden_decl
 					: $hidden_decl;
 				$processor->set_attribute( 'style', $full_style );
+			}
+
+			// Attach scroll-behavior configuration as a data attribute.
+			if ( $has_scroll ) {
+				$allowed_animations = array( 'fade', 'slide', 'none' );
+				$allowed_modes      = array( 'offset', 'direction' );
+				$allowed_dirs       = array( 'down', 'up' );
+
+				$scroll_data = array(
+					'enabled'         => true,
+					'mode'            => in_array( $scroll_behavior['mode'] ?? '', $allowed_modes, true )
+						? $scroll_behavior['mode']
+						: 'offset',
+					'offset'          => max( 0, (int) ( $scroll_behavior['offset'] ?? 100 ) ),
+					'hideOnExceed'    => isset( $scroll_behavior['hideOnExceed'] )
+						? (bool) $scroll_behavior['hideOnExceed']
+						: true,
+					'animation'       => in_array( $scroll_behavior['animation'] ?? '', $allowed_animations, true )
+						? $scroll_behavior['animation']
+						: 'fade',
+					'enableOnMobile'  => isset( $scroll_behavior['enableOnMobile'] )
+						? (bool) $scroll_behavior['enableOnMobile']
+						: true,
+					'enableOnDesktop' => isset( $scroll_behavior['enableOnDesktop'] )
+						? (bool) $scroll_behavior['enableOnDesktop']
+						: true,
+					'directionHideOn' => in_array( $scroll_behavior['directionHideOn'] ?? '', $allowed_dirs, true )
+						? $scroll_behavior['directionHideOn']
+						: 'down',
+				);
+
+				$processor->set_attribute( 'data-ml-scroll', wp_json_encode( $scroll_data ) );
 			}
 		}
 

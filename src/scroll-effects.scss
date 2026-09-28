@@ -13,7 +13,7 @@
     .ml-reveal-stagger:not(.is-ml-revealed)>* {
         opacity: var(--ml-reveal-opacity, 0);
         transform: var(--ml-3d-transform, ) var(--ml-reveal-from, );
-        filter: var(--ml-reveal-filter, none);
+        filter: var(--ml-filter, ) var(--ml-reveal-filter, );
         clip-path: var(--ml-reveal-clip, none);
         will-change: transform, opacity;
     }
@@ -27,7 +27,7 @@
         .ml-reveal-stagger:not(.is-ml-revealed)>* {
             opacity: 1;
             transform: var(--ml-3d-transform, );
-            filter: none;
+            filter: var(--ml-filter, );
             clip-path: none;
             will-change: auto;
         }

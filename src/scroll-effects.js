@@ -64,6 +64,20 @@ function baseTransform(el) {
   return value ? value.trim() : "";
 }
 
+/**
+ * The block's own filter, for the same reason. A backdrop filter applies to
+ * what is behind the block, so it is left alone.
+ */
+function baseFilter(el) {
+  if (!el.classList.contains("ml-has-filter")) {
+    return "";
+  }
+
+  const value = window.getComputedStyle(el).getPropertyValue("--ml-filter");
+
+  return value ? value.trim() : "";
+}
+
 function getItem(el) {
   let item = itemsByElement.get(el);
 
@@ -71,6 +85,7 @@ function getItem(el) {
     item = {
       el,
       base: baseTransform(el),
+      baseFilter: baseFilter(el),
       reveal: null,
       fx: null,
       staggerDelay: 0,
@@ -185,18 +200,19 @@ function update(item, now, rect) {
 
   const el = item.el;
   const transform = [item.base].concat(transforms).filter(Boolean).join(" ");
+  const filter = [item.baseFilter].concat(filters).filter(Boolean).join(" ");
 
   if (settled && (!item.fx || !item.inView) && item.revealDone !== false) {
     // Nothing left to animate: hand the element back to the stylesheet.
     el.style.transform = transform || "";
     el.style.opacity = opacity === 1 ? "" : String(opacity);
-    el.style.filter = filters.join(" ");
+    el.style.filter = filters.length ? filter : "";
     el.style.clipPath = clipPath;
     el.style.willChange = "";
   } else {
     el.style.transform = transform;
     el.style.opacity = String(opacity);
-    el.style.filter = filters.join(" ");
+    el.style.filter = filter;
     el.style.clipPath = clipPath;
     el.style.willChange = "transform, opacity";
   }

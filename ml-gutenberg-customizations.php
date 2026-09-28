@@ -64,6 +64,12 @@ class ML_Gutenberg_Customizations {
 		add_filter( 'render_block_core/paragraph', array( $this, 'apply_typewriter' ), 10, 2 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_typewriter_assets' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_typewriter_styles' ) );
+
+		// CSS filters, on every block.
+		add_filter( 'register_block_type_args', array( $this, 'register_filter_attribute' ) );
+		add_filter( 'render_block', array( $this, 'apply_css_filters' ), 10, 2 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_filter_styles' ) );
+		add_action( 'enqueue_block_assets', array( $this, 'enqueue_filter_editor_styles' ) );
 	}
 
 	/**
@@ -701,11 +707,8 @@ class ML_Gutenberg_Customizations {
 				: (float) $default;
 		}
 
-		// sprintf's %F ignores the locale; before PHP 8 a float cast to string
-		// follows LC_NUMERIC, which prints "1,5" under e.g. nl_NL.
 		$fmt = static function ( float $n ): string {
-			$s = rtrim( rtrim( sprintf( '%.2F', $n ), '0' ), '.' );
-			return '-0' === $s ? '0' : $s;
+			return self::format_css_number( $n );
 		};
 		$css = array_map( $fmt, $v );
 
@@ -1317,6 +1320,170 @@ class ML_Gutenberg_Customizations {
 			. '@keyframes ml-typewriter-blink{to{visibility:hidden}}'
 			. '@media(prefers-reduced-motion:reduce){.ml-typewriter-cursor{animation:none}}'
 		);
+	}
+
+	/**
+	 * Format a number for CSS.
+	 *
+	 * The %F conversion ignores the locale; before PHP 8 a float cast to a
+	 * string follows LC_NUMERIC, which prints "1,5" under e.g. nl_NL.
+	 *
+	 * @param float $n Number to format.
+	 * @return string CSS-safe number.
+	 */
+	private static function format_css_number( float $n ): string {
+		$s = rtrim( rtrim( sprintf( '%.2F', $n ), '0' ), '.' );
+
+		return '-0' === $s ? '0' : $s;
+	}
+
+	/**
+	 * Every filter, in the order they are written:
+	 * array( min, max, neutral, unit, CSS function ).
+	 * Mirrored in src/utils/filters.js — keep both in sync.
+	 */
+	private const FILTER_RANGES = array(
+		'blur'       => array( 0, 50, 0, 'px', 'blur' ),
+		'brightness' => array( 0, 300, 100, '%', 'brightness' ),
+		'contrast'   => array( 0, 300, 100, '%', 'contrast' ),
+		'saturate'   => array( 0, 300, 100, '%', 'saturate' ),
+		'grayscale'  => array( 0, 100, 0, '%', 'grayscale' ),
+		'sepia'      => array( 0, 100, 0, '%', 'sepia' ),
+		'hueRotate'  => array( -180, 180, 0, 'deg', 'hue-rotate' ),
+		'invert'     => array( 0, 100, 0, '%', 'invert' ),
+		'opacity'    => array( 0, 100, 100, '%', 'opacity' ),
+	);
+
+	/**
+	 * Register the filter attribute server-side on every block, so
+	 * ServerSideRender previews accept it.
+	 *
+	 * @param array $args Block type registration arguments.
+	 * @return array Arguments with the mlFilters attribute added.
+	 */
+	public function register_filter_attribute( array $args ): array {
+		$args['attributes'] = is_array( $args['attributes'] ?? null ) ? $args['attributes'] : array();
+
+		$args['attributes']['mlFilters'] = array( 'type' => 'object' );
+
+		return $args;
+	}
+
+	/**
+	 * Build the CSS filter value, leaving out everything still at its neutral
+	 * setting.
+	 *
+	 * Mirrors getFilterValue() in src/utils/filters.js.
+	 *
+	 * @param array $raw Stored attribute.
+	 * @return string CSS filter value, empty when nothing would change.
+	 */
+	private function get_filter_value( array $raw ): string {
+		$parts = array();
+
+		foreach ( self::FILTER_RANGES as $key => $range ) {
+			list( $min, $max, $neutral, $unit, $css ) = $range;
+
+			$value = (float) $this->clamp_number( $raw[ $key ] ?? null, (float) $min, (float) $max, (float) $neutral );
+
+			if ( (float) $neutral !== $value ) {
+				$parts[] = $css . '(' . self::format_css_number( $value ) . $unit . ')';
+			}
+		}
+
+		return implode( ' ', $parts );
+	}
+
+	/**
+	 * Hand the block's filters to CSS.
+	 *
+	 * The value travels as a custom property so the scroll engine can keep it
+	 * in front of its own scroll-driven blur instead of replacing it.
+	 *
+	 * @param string $block_content The block's rendered HTML.
+	 * @param array  $block         The parsed block data.
+	 * @return string Modified block HTML.
+	 */
+	public function apply_css_filters( string $block_content, array $block ): string {
+		$raw = is_array( $block['attrs']['mlFilters'] ?? null ) ? $block['attrs']['mlFilters'] : array();
+
+		if ( empty( $raw ) ) {
+			return $block_content;
+		}
+
+		$value = $this->get_filter_value( $raw );
+
+		if ( '' === $value ) {
+			return $block_content;
+		}
+
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
+
+		do {
+			if ( ! $processor->next_tag() ) {
+				return $block_content;
+			}
+		} while ( in_array( $processor->get_tag(), self::TRANSFORM_3D_SKIPPED_TAGS, true ) );
+
+		$classes = 'backdrop' === ( $raw['target'] ?? '' ) ? 'ml-has-backdrop-filter' : 'ml-has-filter';
+
+		if ( ! empty( $raw['disableOnMobile'] ) ) {
+			$classes .= ' ml-filter-desktop-only';
+		}
+
+		$existing_class = $processor->get_attribute( 'class' ) ?? '';
+		$processor->set_attribute( 'class', trim( $existing_class . ' ' . $classes ) );
+
+		$existing_style = $processor->get_attribute( 'style' ) ?? '';
+		$declaration    = '--ml-filter:' . $value;
+		$processor->set_attribute(
+			'style',
+			$existing_style ? rtrim( $existing_style, ';' ) . ';' . $declaration : $declaration
+		);
+
+		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Build the stylesheet that maps --ml-filter onto the block or onto what
+	 * sits behind it, and drops it below the mobile breakpoint on request.
+	 *
+	 * @param string $prefix    Selector prefix ('' on the frontend).
+	 * @param string $important Either '' or ' !important'.
+	 * @return string CSS rules.
+	 */
+	private function get_filter_css( string $prefix, string $important ): string {
+		return sprintf(
+			'%1$s.ml-has-filter{filter:var(--ml-filter)%2$s}'
+			. '%1$s.ml-has-backdrop-filter{-webkit-backdrop-filter:var(--ml-filter)%2$s;backdrop-filter:var(--ml-filter)%2$s}'
+			. '@media(max-width:%3$s){%1$s.ml-filter-desktop-only{filter:none%2$s;-webkit-backdrop-filter:none%2$s;backdrop-filter:none%2$s}}',
+			$prefix,
+			$important,
+			esc_attr( $this->get_mobile_breakpoint() )
+		);
+	}
+
+	/**
+	 * Enqueue the frontend filter stylesheet.
+	 */
+	public function enqueue_filter_styles(): void {
+		wp_register_style( 'ml-gutenberg-filters', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-filters' );
+		wp_add_inline_style( 'ml-gutenberg-filters', $this->get_filter_css( '', '' ) );
+	}
+
+	/**
+	 * Enqueue the editor filter stylesheet, scoped to block wrappers so
+	 * ServerSideRender output inside a wrapper is not filtered twice.
+	 */
+	public function enqueue_filter_editor_styles(): void {
+		if ( ! is_admin() ) {
+			return;
+		}
+
+		wp_register_style( 'ml-gutenberg-filters-editor', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-filters-editor' );
+		wp_add_inline_style( 'ml-gutenberg-filters-editor', $this->get_filter_css( '[data-block]', ' !important' ) );
 	}
 
 	/**

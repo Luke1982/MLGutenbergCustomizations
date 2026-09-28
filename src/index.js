@@ -29,6 +29,7 @@ import CoverVerticalAlignToolbar from "./components/CoverVerticalAlignToolbar";
 import Transform3dPanel from "./components/Transform3dPanel";
 import ScrollAnimationPanel from "./components/ScrollAnimationPanel";
 import TypewriterPanel from "./components/TypewriterPanel";
+import FiltersPanel from "./components/FiltersPanel";
 import {
   getMobileSpacingClasses,
   getCustomMarginCSS,
@@ -38,6 +39,7 @@ import {
   getTransform3dWrapperProps,
   supportsTransform3d,
 } from "./utils/transform3d";
+import { getFilterValue, isBackdrop } from "./utils/filters";
 
 import "./style.scss";
 
@@ -540,6 +542,96 @@ addFilter(
   "editor.BlockEdit",
   "ml-gutenberg-customizations/typewriter-controls",
   withTypewriterControls,
+);
+
+/**
+ * CSS filters, on every block that has a wrapper.
+ */
+addFilter(
+  "blocks.registerBlockType",
+  "ml-gutenberg-customizations/filter-attribute",
+  (settings) => {
+    if (!supportsTransform3d(settings)) {
+      return settings;
+    }
+
+    return {
+      ...settings,
+      attributes: {
+        ...settings.attributes,
+        mlFilters: {
+          type: "object",
+          default: {},
+        },
+      },
+    };
+  },
+);
+
+const withFilterControls = createHigherOrderComponent((BlockEdit) => {
+  return (props) => {
+    if (!supportsTransform3d(getBlockType(props.name))) {
+      return <BlockEdit {...props} />;
+    }
+
+    return (
+      <>
+        <BlockEdit {...props} />
+        {props.isSelected && (
+          <FiltersPanel
+            attributes={props.attributes}
+            setAttributes={props.setAttributes}
+          />
+        )}
+      </>
+    );
+  };
+}, "withFilterControls");
+
+addFilter(
+  "editor.BlockEdit",
+  "ml-gutenberg-customizations/filter-controls",
+  withFilterControls,
+);
+
+/**
+ * Live editor preview for the filters: the same class and variable the
+ * frontend uses, on the block wrapper.
+ */
+const withFilterEditorWrapper = createHigherOrderComponent((BlockListBlock) => {
+  return (props) => {
+    const value = getFilterValue(props.attributes?.mlFilters);
+
+    if (!value) {
+      return <BlockListBlock {...props} />;
+    }
+
+    const wrapperProps = props.wrapperProps || {};
+    const classes = [
+      wrapperProps.className,
+      isBackdrop(props.attributes.mlFilters)
+        ? "ml-has-backdrop-filter"
+        : "ml-has-filter",
+      props.attributes.mlFilters?.disableOnMobile && "ml-filter-desktop-only",
+    ].filter(Boolean);
+
+    return (
+      <BlockListBlock
+        {...props}
+        wrapperProps={{
+          ...wrapperProps,
+          className: classes.join(" "),
+          style: { ...wrapperProps.style, "--ml-filter": value },
+        }}
+      />
+    );
+  };
+}, "withFilterEditorWrapper");
+
+addFilter(
+  "editor.BlockListBlock",
+  "ml-gutenberg-customizations/filter-editor-wrapper",
+  withFilterEditorWrapper,
 );
 
 registerBlockType("ml/term-image", {

@@ -322,6 +322,10 @@ describe("normalizeScrollFx", () => {
     expect(fx.smoothing).toBe(0.95);
   });
 
+  it("clamps the perspective to the new ceiling", () => {
+    expect(normalizeScrollFx({ perspective: 99999 }).perspective).toBe(10000);
+  });
+
   it("ignores junk values", () => {
     expect(normalizeScrollFx({ translateY: "abc" }).translateY).toBe(0);
   });

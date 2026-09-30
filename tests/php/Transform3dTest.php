@@ -185,7 +185,7 @@ final class Transform3dTest extends TestCase {
 		);
 
 		$this->assertStringContainsString(
-			'--ml-3d-transform:perspective(3000px) translate3d(-2000px, 0px, 0px) rotateX(180deg) scale(3);',
+			'--ml-3d-transform:perspective(10000px) translate3d(-2000px, 0px, 0px) rotateX(180deg) scale(3);',
 			$updated
 		);
 	}

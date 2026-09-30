@@ -3,7 +3,7 @@
  * Mirrored in PHP (TRANSFORM_3D_RANGES) — keep both in sync.
  */
 export const TRANSFORM_3D_RANGES = {
-  perspective: { min: 0, max: 3000, default: 1000 },
+  perspective: { min: 0, max: 10000, default: 1000 },
   rotateX: { min: -180, max: 180, default: 0 },
   rotateY: { min: -180, max: 180, default: 0 },
   rotateZ: { min: -180, max: 180, default: 0 },

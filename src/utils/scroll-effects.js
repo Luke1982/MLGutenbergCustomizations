@@ -62,7 +62,7 @@ export const SCROLL_FX_RANGES = {
   scale: { min: -1, max: 1, step: 0.05, default: 0 },
   opacity: { min: 0, max: 1, step: 0.05, default: 0 },
   blur: { min: 0, max: 50, step: 1, default: 0 },
-  perspective: { min: 0, max: 3000, step: 50, default: 1000 },
+  perspective: { min: 0, max: 10000, step: 50, default: 1000 },
   startOffset: { min: -100, max: 100, step: 1, default: 0 },
   endOffset: { min: -100, max: 100, step: 1, default: 0 },
   smoothing: { min: 0, max: 0.95, step: 0.05, default: 0.15 },

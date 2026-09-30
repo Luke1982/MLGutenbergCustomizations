@@ -578,7 +578,7 @@ class ML_Gutenberg_Customizations {
 	 * Mirrored in src/utils/transform3d.js — keep both in sync.
 	 */
 	private const TRANSFORM_3D_RANGES = array(
-		'perspective' => array( 0, 3000, 1000 ),
+		'perspective' => array( 0, 10000, 1000 ),
 		'rotateX'     => array( -180, 180, 0 ),
 		'rotateY'     => array( -180, 180, 0 ),
 		'rotateZ'     => array( -180, 180, 0 ),
@@ -877,7 +877,7 @@ class ML_Gutenberg_Customizations {
 		'scale'       => array( -1, 1, 0 ),
 		'opacity'     => array( 0, 1, 0 ),
 		'blur'        => array( 0, 50, 0 ),
-		'perspective' => array( 0, 3000, 1000 ),
+		'perspective' => array( 0, 10000, 1000 ),
 		'startOffset' => array( -100, 100, 0 ),
 		'endOffset'   => array( -100, 100, 0 ),
 		'smoothing'   => array( 0, 0.95, 0.15 ),

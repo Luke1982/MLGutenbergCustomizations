@@ -67,7 +67,7 @@ describe("getTransform3dValue", () => {
         scale: 10,
       }),
     ).toBe(
-      "perspective(3000px) translate3d(-2000px, 0px, 0px) rotateX(180deg) scale(3)",
+      "perspective(10000px) translate3d(-2000px, 0px, 0px) rotateX(180deg) scale(3)",
     );
   });
 

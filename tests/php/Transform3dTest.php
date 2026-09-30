@@ -195,6 +195,17 @@ final class Transform3dTest extends TestCase {
 		);
 	}
 
+	public function test_a_matrix_stored_as_a_list_of_numbers_is_accepted(): void {
+		$updated = $this->render(
+			array( 'matrix' => array( 0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 ) )
+		);
+
+		$this->assertStringContainsString(
+			'--ml-3d-transform:matrix3d(0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);',
+			$updated
+		);
+	}
+
 	public function test_the_matrix_comes_before_the_slider_values(): void {
 		$updated = $this->render(
 			array(

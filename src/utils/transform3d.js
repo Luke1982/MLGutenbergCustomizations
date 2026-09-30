@@ -43,7 +43,7 @@ const roundTo6 = (n) => Math.round(n * 1e6) / 1e6;
 
 const MATRIX_LENGTH = 16;
 
-const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+export const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
 /**
  * Read a matrix3d: a pasted CSS function, a bare list of numbers, or an

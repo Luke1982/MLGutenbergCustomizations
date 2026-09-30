@@ -4,16 +4,19 @@ import {
   BaseControl,
   RangeControl,
   ToggleControl,
-  TextareaControl,
+  TextControl,
   Button,
   AlignmentMatrixControl as StableAlignmentMatrixControl,
   __experimentalAlignmentMatrixControl as ExperimentalAlignmentMatrixControl,
   UnitControl as StableUnitControl,
   __experimentalUnitControl as ExperimentalUnitControl,
+  NumberControl as StableNumberControl,
+  __experimentalNumberControl as ExperimentalNumberControl,
 } from "@wordpress/components";
-import { __ } from "@wordpress/i18n";
+import { __, sprintf } from "@wordpress/i18n";
 
 import {
+  IDENTITY_MATRIX,
   TRANSFORM_3D_RANGES,
   TRANSLATE_UNITS,
   getTransform3dValue,
@@ -27,6 +30,7 @@ import {
 const AlignmentMatrixControl =
   StableAlignmentMatrixControl ?? ExperimentalAlignmentMatrixControl;
 const UnitControl = StableUnitControl ?? ExperimentalUnitControl;
+const NumberControl = StableNumberControl ?? ExperimentalNumberControl;
 
 /**
  * Slider plus number-and-unit input for one translate axis. The slider's
@@ -115,8 +119,16 @@ export default function Transform3dPanel({ attributes, setAttributes }) {
   // A matrix takes over the perspective, so the slider is no use while one
   // is in play.
   const matrixActive = getTransform3dValue(stored).startsWith("matrix3d(");
-  const matrixText = typeof stored.matrix === "string" ? stored.matrix : "";
-  const matrixBroken = matrixText.trim() !== "" && !parseMatrix3d(matrixText);
+  const matrix = parseMatrix3d(stored.matrix) || IDENTITY_MATRIX;
+
+  // Editing one cell starts from whatever matrix is there, or the identity.
+  const setCell = (index, next) => {
+    const value = Number(next);
+    const cells = [...matrix];
+
+    cells[index] = Number.isFinite(value) ? value : 0;
+    update({ matrix: cells });
+  };
 
   const rotateSliders = [
     { key: "rotateX", label: __("Rotate X (°)", "ml-gutenberg-customizations") },
@@ -229,34 +241,68 @@ export default function Transform3dPanel({ attributes, setAttributes }) {
 
           {otherSliders.map(renderSlider)}
 
-          <TextareaControl
-            label={__("Matrix (matrix3d)", "ml-gutenberg-customizations")}
-            help={
-              matrixBroken
-                ? __(
-                    "This needs exactly 16 numbers. Until it does, the matrix is ignored and the sliders above are used.",
-                    "ml-gutenberg-customizations",
-                  )
-                : __(
-                    "Paste 16 numbers, with or without the matrix3d() around them. It renders exactly as pasted; the sliders above then apply on top of it.",
-                    "ml-gutenberg-customizations",
-                  )
-            }
-            value={matrixText}
-            rows={3}
-            placeholder="matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)"
-            onChange={(value) => update({ matrix: value })}
+          <BaseControl
+            help={__(
+              "Four rows of four, the way a matrix is written. Anything the sliders above can do, this can do too — and a few things they cannot, like skew.",
+              "ml-gutenberg-customizations",
+            )}
+            __nextHasNoMarginBottom
+          >
+            <BaseControl.VisualLabel>
+              {__("Matrix (matrix3d)", "ml-gutenberg-customizations")}
+            </BaseControl.VisualLabel>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                gap: "4px",
+              }}
+            >
+              {matrix.map((cell, index) => (
+                <div key={index} style={{ minWidth: 0 }}>
+                  <NumberControl
+                    label={sprintf(
+                      /* translators: 1: matrix row, 2: matrix column. */
+                      __("Row %1$d column %2$d", "ml-gutenberg-customizations"),
+                      Math.floor(index / 4) + 1,
+                      (index % 4) + 1,
+                    )}
+                    hideLabelFromVision
+                    value={cell}
+                    step="any"
+                    onChange={(next) => setCell(index, next)}
+                    __nextHasNoMarginBottom
+                  />
+                </div>
+              ))}
+            </div>
+          </BaseControl>
+
+          <TextControl
+            label={__("Paste a matrix", "ml-gutenberg-customizations")}
+            help={__(
+              "Drop in a matrix3d() or 16 numbers and the grid fills itself.",
+              "ml-gutenberg-customizations",
+            )}
+            value=""
+            onChange={(value) => {
+              const pasted = parseMatrix3d(value);
+
+              if (pasted) {
+                update({ matrix: pasted });
+              }
+            }}
             __nextHasNoMarginBottom
           />
 
-          {matrixText.trim() !== "" && (
+          {matrixActive && (
             <div>
               <Button
                 variant="tertiary"
                 isDestructive
                 onClick={() => update({ matrix: "" })}
               >
-                {__("Clear matrix", "ml-gutenberg-customizations")}
+                {__("Reset matrix to identity", "ml-gutenberg-customizations")}
               </Button>
             </div>
           )}

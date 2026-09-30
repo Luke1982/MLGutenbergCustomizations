@@ -1,4 +1,5 @@
 import {
+  parseMatrix3d,
   getTransform3dValue,
   getTransform3dWrapperProps,
   normalizeTransform3d,
@@ -153,6 +154,78 @@ describe("getTransform3dValue", () => {
   it("ignores non-finite values", () => {
     expect(getTransform3dValue({ rotateX: "1e400", rotateZ: 15 })).toBe(
       "perspective(1000px) rotateZ(15deg)",
+    );
+  });
+});
+
+describe("parseMatrix3d", () => {
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+  it("reads a pasted CSS function", () => {
+    expect(
+      parseMatrix3d("matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)"),
+    ).toEqual(identity);
+  });
+
+  it("reads a bare list of numbers, however it is spaced", () => {
+    expect(parseMatrix3d("1,0,0,0\n0,1,0,0\n0,0,1,0\n0,0,0,1")).toEqual(identity);
+    expect(parseMatrix3d("1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1")).toEqual(identity);
+  });
+
+  it("accepts a list that is already numbers", () => {
+    expect(parseMatrix3d(identity)).toEqual(identity);
+  });
+
+  it("keeps the precision a matrix needs", () => {
+    const skewed = parseMatrix3d(
+      "0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1",
+    );
+
+    expect(skewed[0]).toBe(0.866025);
+    expect(skewed[4]).toBe(-0.5);
+  });
+
+  it("rounds away noise beyond six decimals", () => {
+    expect(parseMatrix3d("1.00000049,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1")[0]).toBe(1);
+  });
+
+  it("rejects anything that is not sixteen numbers", () => {
+    expect(parseMatrix3d("1,0,0,0,0,1,0,0,0,0,1,0,0,0,1")).toBeNull();
+    expect(parseMatrix3d("matrix3d(1, 0, 0)")).toBeNull();
+    expect(parseMatrix3d("rotate(45deg)")).toBeNull();
+    expect(parseMatrix3d("")).toBeNull();
+    expect(parseMatrix3d(undefined)).toBeNull();
+  });
+
+  it("rejects values that are not finite", () => {
+    expect(parseMatrix3d("1e400,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1")).toBeNull();
+  });
+});
+
+describe("getTransform3dValue with a matrix", () => {
+  const identity = "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)";
+  const tilt = "matrix3d(0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)";
+
+  it("ignores an identity matrix, which changes nothing", () => {
+    expect(getTransform3dValue({ matrix: identity })).toBe("");
+  });
+
+  it("renders a pasted matrix exactly, without adding perspective", () => {
+    expect(getTransform3dValue({ matrix: tilt })).toBe(
+      "matrix3d(0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)",
+    );
+  });
+
+  it("puts the matrix in front of the slider values", () => {
+    expect(getTransform3dValue({ matrix: tilt, rotateX: 45, translateY: 20 })).toBe(
+      "matrix3d(0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)" +
+        " translate3d(0px, 20px, 0px) rotateX(45deg)",
+    );
+  });
+
+  it("leaves the sliders alone when the matrix is unusable", () => {
+    expect(getTransform3dValue({ matrix: "nonsense", rotateX: 45 })).toBe(
+      "perspective(1000px) rotateX(45deg)",
     );
   });
 });

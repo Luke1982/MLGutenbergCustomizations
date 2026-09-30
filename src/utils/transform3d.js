@@ -37,6 +37,54 @@ export function getTranslateUnits(axis) {
 
 const roundTo2 = (n) => Math.round(n * 100) / 100;
 
+// A matrix carries values like 0.866025, so it keeps more precision than the
+// sliders do.
+const roundTo6 = (n) => Math.round(n * 1e6) / 1e6;
+
+const MATRIX_LENGTH = 16;
+
+const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+/**
+ * Read a matrix3d: a pasted CSS function, a bare list of numbers, or an
+ * array. Returns its 16 numbers, or null when it is not a usable matrix.
+ */
+export function parseMatrix3d(raw) {
+  let parts = null;
+
+  if (Array.isArray(raw)) {
+    parts = raw;
+  } else if (typeof raw === "string" && raw.trim() !== "") {
+    parts = raw
+      .trim()
+      .replace(/^matrix3d\s*\(/i, "")
+      .replace(/\)\s*$/, "")
+      .split(/[\s,]+/)
+      .filter((part) => part !== "");
+  }
+
+  if (!parts || parts.length !== MATRIX_LENGTH) {
+    return null;
+  }
+
+  const numbers = parts.map((part) =>
+    typeof part === "number" ? part : Number(String(part).trim()),
+  );
+
+  if (!numbers.every((n) => Number.isFinite(n))) {
+    return null;
+  }
+
+  return numbers.map(roundTo6);
+}
+
+/**
+ * An identity matrix changes nothing, so it is treated as no matrix at all.
+ */
+function isIdentityMatrix(matrix) {
+  return matrix.every((n, index) => n === IDENTITY_MATRIX[index]);
+}
+
 /**
  * Parse a stored translate value ("50%", "-2em", or a plain number in px)
  * into { quantity, unit }, clamped to the unit's range.
@@ -115,6 +163,8 @@ export function normalizeTransform3d(raw) {
     values[axis] = parseTranslate(stored[axis], axis);
   });
 
+  values.matrix = parseMatrix3d(stored.matrix);
+
   values.origin = TRANSFORM_3D_ORIGINS.includes(stored.origin)
     ? stored.origin
     : DEFAULT_ORIGIN;
@@ -152,11 +202,18 @@ export function getTransform3dValue(raw) {
     functions.push(`scale(${t.scale})`);
   }
 
-  if (functions.length === 0) {
+  const matrix = t.matrix && !isIdentityMatrix(t.matrix) ? t.matrix : null;
+
+  if (functions.length === 0 && !matrix) {
     return "";
   }
 
-  if (t.perspective > 0) {
+  if (matrix) {
+    // A matrix carries its own perspective in its eleventh value, so the
+    // panel's perspective stays out of the way and the matrix renders
+    // exactly as it was pasted.
+    functions.unshift(`matrix3d(${matrix.join(", ")})`);
+  } else if (t.perspective > 0) {
     functions.unshift(`perspective(${t.perspective}px)`);
   }
 

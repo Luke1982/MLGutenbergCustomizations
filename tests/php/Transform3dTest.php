@@ -172,6 +172,67 @@ final class Transform3dTest extends TestCase {
 		$this->assertStringContainsString( 'class="wp-block-paragraph ml-has-3d-transform ml-3d-desktop-only"', $updated );
 	}
 
+	// ── matrix3d ─────────────────────────────────────────────────────────────
+
+	public function test_a_pasted_matrix_renders_exactly_as_pasted(): void {
+		$updated = $this->render(
+			array( 'matrix' => 'matrix3d(0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)' )
+		);
+
+		$this->assertStringContainsString(
+			'--ml-3d-transform:matrix3d(0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);',
+			$updated
+		);
+		$this->assertStringNotContainsString( 'perspective(', $updated );
+	}
+
+	public function test_a_bare_list_of_numbers_is_accepted(): void {
+		$updated = $this->render( array( 'matrix' => '1 0 0 0 0 1 0 0 0 0 1 0 0 0 40 1' ) );
+
+		$this->assertStringContainsString(
+			'--ml-3d-transform:matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 40, 1);',
+			$updated
+		);
+	}
+
+	public function test_the_matrix_comes_before_the_slider_values(): void {
+		$updated = $this->render(
+			array(
+				'matrix'     => 'matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 40, 1)',
+				'rotateX'    => 45,
+				'translateY' => 20,
+			)
+		);
+
+		$this->assertStringContainsString(
+			'--ml-3d-transform:matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 40, 1) translate3d(0px, 20px, 0px) rotateX(45deg);',
+			$updated
+		);
+	}
+
+	public function test_an_identity_matrix_changes_nothing(): void {
+		$block_content = '<p class="wp-block-paragraph">Hi</p>';
+
+		$this->assertSame(
+			$block_content,
+			$this->render( array( 'matrix' => 'matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)' ), $block_content )
+		);
+	}
+
+	public function test_an_unusable_matrix_leaves_the_sliders_alone(): void {
+		foreach ( array( 'nonsense', 'rotate(45deg)', '1,0,0,0,0,1,0,0,0,0,1,0,0,0,1', '1e400,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1' ) as $matrix ) {
+			$updated = $this->render(
+				array(
+					'matrix'  => $matrix,
+					'rotateX' => 45,
+				)
+			);
+
+			$this->assertStringContainsString( '--ml-3d-transform:perspective(1000px) rotateX(45deg);', $updated );
+			$this->assertStringNotContainsString( 'matrix3d', $updated );
+		}
+	}
+
 	// ── Input sanitisation ───────────────────────────────────────────────────
 
 	public function test_values_are_clamped_to_slider_ranges(): void {

@@ -694,6 +694,65 @@ class ML_Gutenberg_Customizations {
 	}
 
 	/**
+	 * A matrix that changes nothing.
+	 */
+	private const IDENTITY_MATRIX_3D = array( 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 );
+
+	/**
+	 * Read a matrix3d: a pasted CSS function, a bare list of numbers, or an
+	 * array.
+	 *
+	 * Mirrors parseMatrix3d() in src/utils/transform3d.js. A matrix carries
+	 * values like 0.866025, so it keeps six decimals where the sliders keep
+	 * two.
+	 *
+	 * @param mixed $raw Stored value.
+	 * @return array|null Sixteen numbers, or null when it is not a matrix.
+	 */
+	private function parse_matrix_3d( $raw ): ?array {
+		if ( is_array( $raw ) ) {
+			$parts = $raw;
+		} elseif ( is_string( $raw ) && '' !== trim( $raw ) ) {
+			$inner = preg_replace( array( '/^matrix3d\s*\(/i', '/\)\s*$/' ), '', trim( $raw ) );
+			$parts = preg_split( '/[\s,]+/', trim( (string) $inner ), -1, PREG_SPLIT_NO_EMPTY );
+		} else {
+			return null;
+		}
+
+		if ( ! is_array( $parts ) || 16 !== count( $parts ) ) {
+			return null;
+		}
+
+		$numbers = array();
+
+		foreach ( $parts as $part ) {
+			if ( ! is_numeric( $part ) || ! is_finite( (float) $part ) ) {
+				return null;
+			}
+
+			$numbers[] = round( (float) $part, 6 );
+		}
+
+		return $numbers;
+	}
+
+	/**
+	 * Whether a matrix leaves the block exactly where it was.
+	 *
+	 * @param array $matrix Sixteen numbers.
+	 * @return bool True when it is the identity matrix.
+	 */
+	private function is_identity_matrix_3d( array $matrix ): bool {
+		foreach ( self::IDENTITY_MATRIX_3D as $index => $value ) {
+			if ( (float) $value !== $matrix[ $index ] ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Build the CSS transform value from mlTransform3d values.
 	 *
 	 * Mirrors getTransform3dValue() in src/utils/transform3d.js. Returns an
@@ -743,11 +802,28 @@ class ML_Gutenberg_Customizations {
 			$functions[] = "scale({$css['scale']})";
 		}
 
-		if ( empty( $functions ) ) {
+		$matrix = $this->parse_matrix_3d( $transform['matrix'] ?? null );
+
+		if ( null !== $matrix && $this->is_identity_matrix_3d( $matrix ) ) {
+			$matrix = null;
+		}
+
+		if ( empty( $functions ) && null === $matrix ) {
 			return '';
 		}
 
-		if ( $v['perspective'] > 0 ) {
+		if ( null !== $matrix ) {
+			// A matrix carries its own perspective in its eleventh value, so
+			// the panel's perspective stays out of the way and the matrix
+			// renders exactly as it was pasted.
+			$formatted = array();
+
+			foreach ( $matrix as $number ) {
+				$formatted[] = self::format_css_number( $number, 6 );
+			}
+
+			array_unshift( $functions, 'matrix3d(' . implode( ', ', $formatted ) . ')' );
+		} elseif ( $v['perspective'] > 0 ) {
 			array_unshift( $functions, "perspective({$css['perspective']}px)" );
 		}
 
@@ -1334,11 +1410,12 @@ class ML_Gutenberg_Customizations {
 	 * The %F conversion ignores the locale; before PHP 8 a float cast to a
 	 * string follows LC_NUMERIC, which prints "1,5" under e.g. nl_NL.
 	 *
-	 * @param float $n Number to format.
+	 * @param float $n         Number to format.
+	 * @param int   $precision  Decimals to keep.
 	 * @return string CSS-safe number.
 	 */
-	private static function format_css_number( float $n ): string {
-		$s = rtrim( rtrim( sprintf( '%.2F', $n ), '0' ), '.' );
+	private static function format_css_number( float $n, int $precision = 2 ): string {
+		$s = rtrim( rtrim( sprintf( '%.' . $precision . 'F', $n ), '0' ), '.' );
 
 		return '-0' === $s ? '0' : $s;
 	}

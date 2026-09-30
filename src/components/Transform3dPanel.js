@@ -4,6 +4,7 @@ import {
   BaseControl,
   RangeControl,
   ToggleControl,
+  TextareaControl,
   Button,
   AlignmentMatrixControl as StableAlignmentMatrixControl,
   __experimentalAlignmentMatrixControl as ExperimentalAlignmentMatrixControl,
@@ -15,8 +16,10 @@ import { __ } from "@wordpress/i18n";
 import {
   TRANSFORM_3D_RANGES,
   TRANSLATE_UNITS,
+  getTransform3dValue,
   getTranslateUnits,
   normalizeTransform3d,
+  parseMatrix3d,
   parseTranslate,
 } from "../utils/transform3d";
 
@@ -109,6 +112,12 @@ export default function Transform3dPanel({ attributes, setAttributes }) {
     });
   }
 
+  // A matrix takes over the perspective, so the slider is no use while one
+  // is in play.
+  const matrixActive = getTransform3dValue(stored).startsWith("matrix3d(");
+  const matrixText = typeof stored.matrix === "string" ? stored.matrix : "";
+  const matrixBroken = matrixText.trim() !== "" && !parseMatrix3d(matrixText);
+
   const rotateSliders = [
     { key: "rotateX", label: __("Rotate X (°)", "ml-gutenberg-customizations") },
     { key: "rotateY", label: __("Rotate Y (°)", "ml-gutenberg-customizations") },
@@ -148,18 +157,25 @@ export default function Transform3dPanel({ attributes, setAttributes }) {
       key: "perspective",
       label: __("Perspective (px)", "ml-gutenberg-customizations"),
       step: 10,
-      help: __(
-        "Lower values exaggerate the 3D depth. 0 disables perspective.",
-        "ml-gutenberg-customizations",
-      ),
+      disabled: matrixActive,
+      help: matrixActive
+        ? __(
+            "Ignored while a matrix is set — a matrix carries its own perspective.",
+            "ml-gutenberg-customizations",
+          )
+        : __(
+            "Lower values exaggerate the 3D depth. 0 disables perspective.",
+            "ml-gutenberg-customizations",
+          ),
     },
   ];
 
-  const renderSlider = ({ key, label, step = 1, help }) => (
+  const renderSlider = ({ key, label, step = 1, help, disabled }) => (
     <RangeControl
       key={key}
       label={label}
       help={help}
+      disabled={disabled}
       value={t[key]}
       onChange={(value) => update({ [key]: value })}
       min={TRANSFORM_3D_RANGES[key].min}
@@ -212,6 +228,38 @@ export default function Transform3dPanel({ attributes, setAttributes }) {
           ))}
 
           {otherSliders.map(renderSlider)}
+
+          <TextareaControl
+            label={__("Matrix (matrix3d)", "ml-gutenberg-customizations")}
+            help={
+              matrixBroken
+                ? __(
+                    "This needs exactly 16 numbers. Until it does, the matrix is ignored and the sliders above are used.",
+                    "ml-gutenberg-customizations",
+                  )
+                : __(
+                    "Paste 16 numbers, with or without the matrix3d() around them. It renders exactly as pasted; the sliders above then apply on top of it.",
+                    "ml-gutenberg-customizations",
+                  )
+            }
+            value={matrixText}
+            rows={3}
+            placeholder="matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)"
+            onChange={(value) => update({ matrix: value })}
+            __nextHasNoMarginBottom
+          />
+
+          {matrixText.trim() !== "" && (
+            <div>
+              <Button
+                variant="tertiary"
+                isDestructive
+                onClick={() => update({ matrix: "" })}
+              >
+                {__("Clear matrix", "ml-gutenberg-customizations")}
+              </Button>
+            </div>
+          )}
 
           <ToggleControl
             label={__("Disable on mobile", "ml-gutenberg-customizations")}

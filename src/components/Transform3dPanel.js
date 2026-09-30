@@ -14,9 +14,10 @@ import {
   __experimentalNumberControl as ExperimentalNumberControl,
 } from "@wordpress/components";
 import { __, sprintf } from "@wordpress/i18n";
+import { useRef } from "@wordpress/element";
 
+import { DEFAULT_CORNERS, matrixFromCorners } from "../utils/matrix-corners";
 import {
-  IDENTITY_MATRIX,
   TRANSFORM_3D_RANGES,
   TRANSLATE_UNITS,
   getTransform3dValue,
@@ -97,7 +98,35 @@ function TranslateControl({ axis, label, help, stored, value, onChange }) {
   );
 }
 
-export default function Transform3dPanel({ attributes, setAttributes }) {
+const CORNER_LABELS = ["Top left", "Top right", "Bottom left", "Bottom right"];
+
+const clampCorner = (n) => Math.min(1.5, Math.max(-0.5, Math.round(n * 100) / 100));
+
+function readCorners(stored) {
+  if (
+    Array.isArray(stored) &&
+    stored.length === 4 &&
+    stored.every((c) => Array.isArray(c) && c.length === 2 && c.every(Number.isFinite))
+  ) {
+    return stored;
+  }
+
+  return DEFAULT_CORNERS;
+}
+
+/**
+ * The block's untransformed size in the editor canvas, which the warp is
+ * measured against.
+ */
+function blockSize(clientId) {
+  const canvas = document.querySelector('iframe[name="editor-canvas"]');
+  const doc = canvas?.contentDocument || document;
+  const el = doc.querySelector(`[data-block="${clientId}"]`);
+
+  return el ? { width: el.offsetWidth, height: el.offsetHeight } : null;
+}
+
+export default function Transform3dPanel({ attributes, setAttributes, clientId }) {
   const stored = attributes.mlTransform3d || {};
   const t = normalizeTransform3d(stored);
 
@@ -116,19 +145,58 @@ export default function Transform3dPanel({ attributes, setAttributes }) {
     });
   }
 
+  const surfaceRef = useRef(null);
+  const corners = readCorners(stored.corners);
+
+  // Dragging a corner recomputes the matrix against the block's real size in
+  // the canvas, so the warp matches what is on screen.
+  const setCorners = (next) => {
+    const size = blockSize(clientId);
+    const warp = size ? matrixFromCorners(next, size.width, size.height) : null;
+
+    update({ corners: next, matrix: warp || "" });
+  };
+
+  const setCorner = (index, axis, value) => {
+    const number = Number(value);
+
+    setCorners(
+      corners.map((corner, i) =>
+        i === index
+          ? corner.map((c, a) => (a === axis ? clampCorner(Number.isFinite(number) ? number : 0) : c))
+          : corner,
+      ),
+    );
+  };
+
+  const startDrag = (index) => (event) => {
+    event.preventDefault();
+
+    const surface = surfaceRef.current;
+
+    if (!surface) {
+      return;
+    }
+
+    const box = surface.getBoundingClientRect();
+    const move = (moveEvent) => {
+      const x = clampCorner((moveEvent.clientX - box.left) / box.width);
+      const y = clampCorner((moveEvent.clientY - box.top) / box.height);
+
+      setCorners(corners.map((corner, i) => (i === index ? [x, y] : corner)));
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+  };
+
   // A matrix takes over the perspective, so the slider is no use while one
   // is in play.
   const matrixActive = getTransform3dValue(stored).startsWith("matrix3d(");
-  const matrix = parseMatrix3d(stored.matrix) || IDENTITY_MATRIX;
-
-  // Editing one cell starts from whatever matrix is there, or the identity.
-  const setCell = (index, next) => {
-    const value = Number(next);
-    const cells = [...matrix];
-
-    cells[index] = Number.isFinite(value) ? value : 0;
-    update({ matrix: cells });
-  };
 
   const rotateSliders = [
     { key: "rotateX", label: __("Rotate X (°)", "ml-gutenberg-customizations") },
@@ -243,34 +311,94 @@ export default function Transform3dPanel({ attributes, setAttributes }) {
 
           <BaseControl
             help={__(
-              "Four rows of four, the way a matrix is written. Anything the sliders above can do, this can do too — and a few things they cannot, like skew.",
+              "Drag the corners to warp the block. Off a rectangle you get perspective, which the sliders above cannot do.",
               "ml-gutenberg-customizations",
             )}
             __nextHasNoMarginBottom
           >
             <BaseControl.VisualLabel>
-              {__("Matrix (matrix3d)", "ml-gutenberg-customizations")}
+              {__("Corner warp", "ml-gutenberg-customizations")}
             </BaseControl.VisualLabel>
             <div
+              ref={surfaceRef}
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                gap: "4px",
+                position: "relative",
+                width: "100%",
+                height: "150px",
+                margin: "4px 0 8px",
+                border: "1px dashed #949494",
+                background: "#f0f0f0",
+                touchAction: "none",
               }}
             >
-              {matrix.map((cell, index) => (
+              <svg
+                viewBox="0 0 1 1"
+                preserveAspectRatio="none"
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+              >
+                <polygon
+                  points={`${corners[0][0]},${corners[0][1]} ${corners[1][0]},${corners[1][1]} ${corners[3][0]},${corners[3][1]} ${corners[2][0]},${corners[2][1]}`}
+                  fill="rgba(0, 124, 186, 0.15)"
+                  stroke="#007cba"
+                  strokeWidth="0.008"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+              {corners.map(([x, y], index) => (
+                <button
+                  key={index}
+                  type="button"
+                  aria-label={sprintf(
+                    /* translators: %s: which corner, e.g. Top left. */
+                    __("Drag the %s corner", "ml-gutenberg-customizations"),
+                    CORNER_LABELS[index],
+                  )}
+                  onPointerDown={startDrag(index)}
+                  style={{
+                    position: "absolute",
+                    left: `${x * 100}%`,
+                    top: `${y * 100}%`,
+                    width: "18px",
+                    height: "18px",
+                    margin: "-9px 0 0 -9px",
+                    padding: 0,
+                    borderRadius: "50%",
+                    border: "2px solid #fff",
+                    background: "#007cba",
+                    cursor: "grab",
+                    touchAction: "none",
+                  }}
+                />
+              ))}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+              {corners.map(([x, y], index) => (
                 <div key={index} style={{ minWidth: 0 }}>
                   <NumberControl
                     label={sprintf(
-                      /* translators: 1: matrix row, 2: matrix column. */
-                      __("Row %1$d column %2$d", "ml-gutenberg-customizations"),
-                      Math.floor(index / 4) + 1,
-                      (index % 4) + 1,
+                      /* translators: %s: which corner, e.g. Top left. */
+                      __("%s X", "ml-gutenberg-customizations"),
+                      CORNER_LABELS[index],
                     )}
-                    hideLabelFromVision
-                    value={cell}
-                    step="any"
-                    onChange={(next) => setCell(index, next)}
+                    value={x}
+                    step={0.05}
+                    min={-0.5}
+                    max={1.5}
+                    onChange={(next) => setCorner(index, 0, next)}
+                    __nextHasNoMarginBottom
+                  />
+                  <NumberControl
+                    label={sprintf(
+                      /* translators: %s: which corner, e.g. Top left. */
+                      __("%s Y", "ml-gutenberg-customizations"),
+                      CORNER_LABELS[index],
+                    )}
+                    value={y}
+                    step={0.05}
+                    min={-0.5}
+                    max={1.5}
+                    onChange={(next) => setCorner(index, 1, next)}
                     __nextHasNoMarginBottom
                   />
                 </div>
@@ -300,9 +428,9 @@ export default function Transform3dPanel({ attributes, setAttributes }) {
               <Button
                 variant="tertiary"
                 isDestructive
-                onClick={() => update({ matrix: "" })}
+                onClick={() => update({ matrix: "", corners: DEFAULT_CORNERS })}
               >
-                {__("Reset matrix to identity", "ml-gutenberg-customizations")}
+                {__("Reset the warp", "ml-gutenberg-customizations")}
               </Button>
             </div>
           )}

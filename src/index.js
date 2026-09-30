@@ -379,6 +379,7 @@ const withTransform3dControls = createHigherOrderComponent((BlockEdit) => {
           <Transform3dPanel
             attributes={props.attributes}
             setAttributes={props.setAttributes}
+            clientId={props.clientId}
           />
         )}
       </>

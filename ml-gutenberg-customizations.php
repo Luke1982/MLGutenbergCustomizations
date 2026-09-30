@@ -70,6 +70,12 @@ class ML_Gutenberg_Customizations {
 		add_filter( 'render_block', array( $this, 'apply_css_filters' ), 10, 2 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_filter_styles' ) );
 		add_action( 'enqueue_block_assets', array( $this, 'enqueue_filter_editor_styles' ) );
+
+		// Position controls, on every block.
+		add_filter( 'register_block_type_args', array( $this, 'register_position_attribute' ) );
+		add_filter( 'render_block', array( $this, 'apply_position' ), 10, 2 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_position_styles' ) );
+		add_action( 'enqueue_block_assets', array( $this, 'enqueue_position_editor_styles' ) );
 	}
 
 	/**
@@ -1484,6 +1490,170 @@ class ML_Gutenberg_Customizations {
 		wp_register_style( 'ml-gutenberg-filters-editor', false, array(), '1.0' );
 		wp_enqueue_style( 'ml-gutenberg-filters-editor' );
 		wp_add_inline_style( 'ml-gutenberg-filters-editor', $this->get_filter_css( '[data-block]', ' !important' ) );
+	}
+
+	/**
+	 * Position values the controls offer. Anything else leaves the block in
+	 * the normal flow.
+	 */
+	private const POSITION_TYPES = array( 'relative', 'absolute', 'fixed', 'sticky' );
+
+	/**
+	 * Units an offset may use: array( min, max ).
+	 * Mirrored in src/utils/position.js — keep both in sync.
+	 */
+	private const INSET_UNITS = array(
+		'px'  => array( -2000, 2000 ),
+		'%'   => array( -200, 200 ),
+		'em'  => array( -100, 100 ),
+		'rem' => array( -100, 100 ),
+		'vw'  => array( -100, 100 ),
+		'vh'  => array( -100, 100 ),
+	);
+
+	/**
+	 * Register the position attribute server-side on every block, so
+	 * ServerSideRender previews accept it.
+	 *
+	 * @param array $args Block type registration arguments.
+	 * @return array Arguments with the mlPosition attribute added.
+	 */
+	public function register_position_attribute( array $args ): array {
+		$args['attributes'] = is_array( $args['attributes'] ?? null ) ? $args['attributes'] : array();
+
+		$args['attributes']['mlPosition'] = array( 'type' => 'object' );
+
+		return $args;
+	}
+
+	/**
+	 * Read a stored offset ("20px", "10%", or a plain number in px) and give
+	 * it back clamped to its unit's range.
+	 *
+	 * Mirrors parseInset() in src/utils/position.js. Anything unusable comes
+	 * back empty, which leaves that side at auto.
+	 *
+	 * @param mixed $raw Stored value.
+	 * @return string CSS length, or an empty string.
+	 */
+	private function parse_inset( $raw ): string {
+		$quantity = null;
+		$unit     = 'px';
+
+		if ( is_int( $raw ) || is_float( $raw ) ) {
+			$quantity = (float) $raw;
+		} elseif ( is_string( $raw ) && '' !== trim( $raw ) && preg_match( '/^(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-z%]*)$/i', trim( $raw ), $matches ) ) {
+			$quantity = (float) $matches[1];
+			$unit     = '' === $matches[2] ? 'px' : strtolower( $matches[2] );
+		}
+
+		if ( null === $quantity || ! is_finite( $quantity ) || ! isset( self::INSET_UNITS[ $unit ] ) ) {
+			return '';
+		}
+
+		list( $min, $max ) = self::INSET_UNITS[ $unit ];
+
+		return self::format_css_number( round( max( $min, min( $max, $quantity ) ), 2 ) ) . $unit;
+	}
+
+	/**
+	 * Hand the block's position to CSS.
+	 *
+	 * Offsets left empty stay out of the output, so the stylesheet's own
+	 * `auto` fallback applies to that side.
+	 *
+	 * @param string $block_content The block's rendered HTML.
+	 * @param array  $block         The parsed block data.
+	 * @return string Modified block HTML.
+	 */
+	public function apply_position( string $block_content, array $block ): string {
+		$raw  = is_array( $block['attrs']['mlPosition'] ?? null ) ? $block['attrs']['mlPosition'] : array();
+		$type = isset( $raw['type'] ) && in_array( $raw['type'], self::POSITION_TYPES, true ) ? $raw['type'] : '';
+
+		if ( '' === $type ) {
+			return $block_content;
+		}
+
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
+
+		do {
+			if ( ! $processor->next_tag() ) {
+				return $block_content;
+			}
+		} while ( in_array( $processor->get_tag(), self::TRANSFORM_3D_SKIPPED_TAGS, true ) );
+
+		$declarations = array( '--ml-position:' . $type );
+
+		foreach ( array( 'top', 'right', 'bottom', 'left' ) as $side ) {
+			$value = $this->parse_inset( $raw[ $side ] ?? null );
+
+			if ( '' !== $value ) {
+				$declarations[] = '--ml-' . $side . ':' . $value;
+			}
+		}
+
+		if ( is_numeric( $raw['zIndex'] ?? null ) && is_finite( (float) $raw['zIndex'] ) ) {
+			$declarations[] = '--ml-z:' . (int) round( max( -999, min( 999, (float) $raw['zIndex'] ) ) );
+		}
+
+		$classes = 'ml-has-position';
+
+		if ( ! empty( $raw['disableOnMobile'] ) ) {
+			$classes .= ' ml-position-desktop-only';
+		}
+
+		$existing_class = $processor->get_attribute( 'class' ) ?? '';
+		$processor->set_attribute( 'class', trim( $existing_class . ' ' . $classes ) );
+
+		$existing_style = $processor->get_attribute( 'style' ) ?? '';
+		$declaration    = implode( ';', $declarations );
+		$processor->set_attribute(
+			'style',
+			$existing_style ? rtrim( $existing_style, ';' ) . ';' . $declaration : $declaration
+		);
+
+		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Build the stylesheet that maps the position variables, and returns the
+	 * block to the normal flow below the mobile breakpoint on request.
+	 *
+	 * @param string $prefix    Selector prefix ('' on the frontend).
+	 * @param string $important Either '' or ' !important'.
+	 * @return string CSS rules.
+	 */
+	private function get_position_css( string $prefix, string $important ): string {
+		return sprintf(
+			'%1$s.ml-has-position{position:var(--ml-position)%2$s;top:var(--ml-top,auto)%2$s;right:var(--ml-right,auto)%2$s;'
+			. 'bottom:var(--ml-bottom,auto)%2$s;left:var(--ml-left,auto)%2$s;z-index:var(--ml-z,auto)%2$s}'
+			. '@media(max-width:%3$s){%1$s.ml-position-desktop-only{position:static%2$s}}',
+			$prefix,
+			$important,
+			esc_attr( $this->get_mobile_breakpoint() )
+		);
+	}
+
+	/**
+	 * Enqueue the frontend position stylesheet.
+	 */
+	public function enqueue_position_styles(): void {
+		wp_register_style( 'ml-gutenberg-position', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-position' );
+		wp_add_inline_style( 'ml-gutenberg-position', $this->get_position_css( '', '' ) );
+	}
+
+	/**
+	 * Enqueue the editor position stylesheet, scoped to block wrappers.
+	 */
+	public function enqueue_position_editor_styles(): void {
+		if ( ! is_admin() ) {
+			return;
+		}
+
+		wp_register_style( 'ml-gutenberg-position-editor', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-position-editor' );
+		wp_add_inline_style( 'ml-gutenberg-position-editor', $this->get_position_css( '[data-block]', ' !important' ) );
 	}
 
 	/**

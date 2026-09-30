@@ -30,6 +30,7 @@ import Transform3dPanel from "./components/Transform3dPanel";
 import ScrollAnimationPanel from "./components/ScrollAnimationPanel";
 import TypewriterPanel from "./components/TypewriterPanel";
 import FiltersPanel from "./components/FiltersPanel";
+import PositionPanel from "./components/PositionPanel";
 import {
   getMobileSpacingClasses,
   getCustomMarginCSS,
@@ -40,6 +41,7 @@ import {
   supportsTransform3d,
 } from "./utils/transform3d";
 import { getFilterValue, isBackdrop } from "./utils/filters";
+import { getPositionStyles } from "./utils/position";
 
 import "./style.scss";
 
@@ -632,6 +634,94 @@ addFilter(
   "editor.BlockListBlock",
   "ml-gutenberg-customizations/filter-editor-wrapper",
   withFilterEditorWrapper,
+);
+
+/**
+ * Position controls, on every block that has a wrapper.
+ */
+addFilter(
+  "blocks.registerBlockType",
+  "ml-gutenberg-customizations/position-attribute",
+  (settings) => {
+    if (!supportsTransform3d(settings)) {
+      return settings;
+    }
+
+    return {
+      ...settings,
+      attributes: {
+        ...settings.attributes,
+        mlPosition: {
+          type: "object",
+          default: {},
+        },
+      },
+    };
+  },
+);
+
+const withPositionControls = createHigherOrderComponent((BlockEdit) => {
+  return (props) => {
+    if (!supportsTransform3d(getBlockType(props.name))) {
+      return <BlockEdit {...props} />;
+    }
+
+    return (
+      <>
+        <BlockEdit {...props} />
+        {props.isSelected && (
+          <PositionPanel
+            attributes={props.attributes}
+            setAttributes={props.setAttributes}
+          />
+        )}
+      </>
+    );
+  };
+}, "withPositionControls");
+
+addFilter(
+  "editor.BlockEdit",
+  "ml-gutenberg-customizations/position-controls",
+  withPositionControls,
+);
+
+/**
+ * Live editor preview: blocks sit where they will on the page, overlap and
+ * all.
+ */
+const withPositionEditorWrapper = createHigherOrderComponent(
+  (BlockListBlock) => {
+    return (props) => {
+      const position = getPositionStyles(props.attributes?.mlPosition);
+
+      if (!position) {
+        return <BlockListBlock {...props} />;
+      }
+
+      const wrapperProps = props.wrapperProps || {};
+
+      return (
+        <BlockListBlock
+          {...props}
+          wrapperProps={{
+            ...wrapperProps,
+            className: [wrapperProps.className, position.className]
+              .filter(Boolean)
+              .join(" "),
+            style: { ...wrapperProps.style, ...position.style },
+          }}
+        />
+      );
+    };
+  },
+  "withPositionEditorWrapper",
+);
+
+addFilter(
+  "editor.BlockListBlock",
+  "ml-gutenberg-customizations/position-editor-wrapper",
+  withPositionEditorWrapper,
 );
 
 registerBlockType("ml/term-image", {

@@ -142,7 +142,7 @@ export default function Transform3dPanel({ attributes, setAttributes }) {
     {
       key: "scale",
       label: __("Scale", "ml-gutenberg-customizations"),
-      step: 0.05,
+      step: 0.01,
     },
     {
       key: "perspective",

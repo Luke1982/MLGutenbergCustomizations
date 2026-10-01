@@ -5,9 +5,21 @@ import {
   RangeControl,
   SelectControl,
   ToggleControl,
+  UnitControl as StableUnitControl,
+  __experimentalUnitControl as ExperimentalUnitControl,
 } from "@wordpress/components";
+
+const UnitControl = StableUnitControl ?? ExperimentalUnitControl;
+
+const PERSPECTIVE_UNIT_OPTIONS = Object.keys(PERSPECTIVE_UNITS).map((unit) => ({
+  value: unit,
+  label: unit,
+  default: unit === "px" ? 1000 : 50,
+  step: PERSPECTIVE_UNITS[unit].step,
+}));
 import { __ } from "@wordpress/i18n";
 
+import { PERSPECTIVE_UNITS } from "../utils/transform3d";
 import {
   REVEAL_AMOUNTS,
   SCROLL_FX_RANGES,
@@ -391,14 +403,16 @@ export default function ScrollAnimationPanel({
 
               {fxSliders.map(fxSlider)}
 
-              {fxSlider({
-                key: "perspective",
-                label: __("Perspective (px)", "ml-gutenberg-customizations"),
-                help: __(
-                  "Depth for the X and Y rotations. 0 keeps them flat.",
+              <UnitControl
+                label={__("Perspective", "ml-gutenberg-customizations")}
+                help={__(
+                  "Depth for the X and Y rotations; empty or 0 keeps them flat.",
                   "ml-gutenberg-customizations",
-                ),
-              })}
+                )}
+                value={fx.perspective}
+                units={PERSPECTIVE_UNIT_OPTIONS}
+                onChange={(value) => updateFx({ perspective: value ?? "" })}
+              />
 
               {fxSlider({
                 key: "startOffset",

@@ -3,7 +3,6 @@
  * Mirrored in PHP (TRANSFORM_3D_RANGES) — keep both in sync.
  */
 export const TRANSFORM_3D_RANGES = {
-  perspective: { min: 0, max: 10000, step: 1, default: 1000 },
   rotateX: { min: -180, max: 180, step: 0.01, default: 0 },
   rotateY: { min: -180, max: 180, step: 0.01, default: 0 },
   rotateZ: { min: -180, max: 180, step: 0.01, default: 0 },
@@ -26,6 +25,56 @@ export const TRANSLATE_UNITS = {
 };
 
 export const TRANSLATE_AXES = ["translateX", "translateY", "translateZ"];
+
+/**
+ * Lengths CSS accepts for perspective. No percentages — perspective takes a
+ * length only. The cq* units need an ancestor with container-type set,
+ * otherwise the browser falls back to the viewport.
+ */
+export const PERSPECTIVE_UNITS = {
+  px: { min: 0, max: 10000, step: 1 },
+  em: { min: 0, max: 1000, step: 0.1 },
+  rem: { min: 0, max: 1000, step: 0.1 },
+  vw: { min: 0, max: 500, step: 1 },
+  vh: { min: 0, max: 500, step: 1 },
+  vmin: { min: 0, max: 500, step: 1 },
+  vmax: { min: 0, max: 500, step: 1 },
+  cqw: { min: 0, max: 500, step: 1 },
+  cqh: { min: 0, max: 500, step: 1 },
+  cqmin: { min: 0, max: 500, step: 1 },
+  cqmax: { min: 0, max: 500, step: 1 },
+};
+
+/**
+ * Read a stored perspective ("40vw", "25cqw", or a plain number in px).
+ * Zero, junk and unknown units all mean no perspective at all.
+ */
+export function parsePerspective(raw) {
+  let quantity = NaN;
+  let unit = "px";
+
+  if (typeof raw === "number") {
+    quantity = raw;
+  } else if (typeof raw === "string" && raw.trim() !== "") {
+    const match = raw
+      .trim()
+      .match(/^(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-z]*)$/i);
+
+    if (match) {
+      quantity = Number(match[1]);
+      unit = match[2].toLowerCase() || "px";
+    }
+  }
+
+  if (!Number.isFinite(quantity) || !PERSPECTIVE_UNITS[unit]) {
+    return "";
+  }
+
+  const range = PERSPECTIVE_UNITS[unit];
+  const value = roundTo2(Math.min(range.max, Math.max(range.min, quantity)));
+
+  return value > 0 ? `${value}${unit}` : "";
+}
 
 /**
  * Units available on a translate axis. CSS only allows a percentage on
@@ -154,6 +203,10 @@ export function normalizeTransform3d(raw) {
   const stored = raw || {};
   const values = {};
 
+  values.perspective = parsePerspective(
+    stored.perspective === undefined ? 1000 : stored.perspective,
+  );
+
   Object.entries(TRANSFORM_3D_RANGES).forEach(([key, range]) => {
     const num = toNumber(stored[key]);
     values[key] = Number.isFinite(num)
@@ -215,8 +268,8 @@ export function getTransform3dValue(raw) {
     // panel's perspective stays out of the way and the matrix renders
     // exactly as it was pasted.
     functions.unshift(`matrix3d(${matrix.join(", ")})`);
-  } else if (t.perspective > 0) {
-    functions.unshift(`perspective(${t.perspective}px)`);
+  } else if (t.perspective) {
+    functions.unshift(`perspective(${t.perspective})`);
   }
 
   return functions.join(" ");

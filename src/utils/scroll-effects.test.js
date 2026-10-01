@@ -238,6 +238,13 @@ describe("getScrollFxState", () => {
     );
   });
 
+  it("takes viewport and container units for perspective", () => {
+    expect(
+      getScrollFxState({ rotateY: 20, perspective: "30cqw", mode: "progressive" }, 1)
+        .transform,
+    ).toBe("perspective(30cqw) rotateY(20deg)");
+  });
+
   it("can switch perspective off for a flat rotation", () => {
     expect(
       getScrollFxState({ rotateY: 20, perspective: 0, mode: "progressive" }, 1)
@@ -302,7 +309,7 @@ describe("normalizeScrollFx", () => {
       scale: 0,
       opacity: 0,
       blur: 0,
-      perspective: 1000,
+      perspective: "1000px",
       mode: "centered",
       startOffset: 0,
       endOffset: 0,
@@ -323,7 +330,7 @@ describe("normalizeScrollFx", () => {
   });
 
   it("clamps the perspective to the new ceiling", () => {
-    expect(normalizeScrollFx({ perspective: 99999 }).perspective).toBe(10000);
+    expect(normalizeScrollFx({ perspective: 99999 }).perspective).toBe("10000px");
   });
 
   it("ignores junk values", () => {

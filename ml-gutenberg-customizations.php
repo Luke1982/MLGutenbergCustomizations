@@ -578,11 +578,10 @@ class ML_Gutenberg_Customizations {
 	 * Mirrored in src/utils/transform3d.js — keep both in sync.
 	 */
 	private const TRANSFORM_3D_RANGES = array(
-		'perspective' => array( 0, 10000, 1000 ),
-		'rotateX'     => array( -180, 180, 0 ),
-		'rotateY'     => array( -180, 180, 0 ),
-		'rotateZ'     => array( -180, 180, 0 ),
-		'scale'       => array( 0, 3, 1 ),
+		'rotateX' => array( -180, 180, 0 ),
+		'rotateY' => array( -180, 180, 0 ),
+		'rotateZ' => array( -180, 180, 0 ),
+		'scale'   => array( 0, 3, 1 ),
 	);
 
 	/**
@@ -761,6 +760,55 @@ class ML_Gutenberg_Customizations {
 	}
 
 	/**
+	 * Lengths CSS accepts for perspective: array( min, max ). No percentages —
+	 * perspective takes a length only.
+	 * Mirrored in src/utils/transform3d.js — keep both in sync.
+	 */
+	private const PERSPECTIVE_UNITS = array(
+		'px'    => array( 0, 10000 ),
+		'em'    => array( 0, 1000 ),
+		'rem'   => array( 0, 1000 ),
+		'vw'    => array( 0, 500 ),
+		'vh'    => array( 0, 500 ),
+		'vmin'  => array( 0, 500 ),
+		'vmax'  => array( 0, 500 ),
+		'cqw'   => array( 0, 500 ),
+		'cqh'   => array( 0, 500 ),
+		'cqmin' => array( 0, 500 ),
+		'cqmax' => array( 0, 500 ),
+	);
+
+	/**
+	 * Read a stored perspective ("40vw", "25cqw", or a plain number in px).
+	 *
+	 * Mirrors parsePerspective() in src/utils/transform3d.js. Zero, junk and
+	 * units CSS does not allow all mean no perspective at all.
+	 *
+	 * @param mixed $raw Stored value.
+	 * @return string CSS length, or an empty string.
+	 */
+	private function parse_perspective( $raw ): string {
+		$quantity = null;
+		$unit     = 'px';
+
+		if ( is_int( $raw ) || is_float( $raw ) ) {
+			$quantity = (float) $raw;
+		} elseif ( is_string( $raw ) && '' !== trim( $raw ) && preg_match( '/^(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-z]*)$/i', trim( $raw ), $matches ) ) {
+			$quantity = (float) $matches[1];
+			$unit     = '' === $matches[2] ? 'px' : strtolower( $matches[2] );
+		}
+
+		if ( null === $quantity || ! is_finite( $quantity ) || ! isset( self::PERSPECTIVE_UNITS[ $unit ] ) ) {
+			return '';
+		}
+
+		list( $min, $max ) = self::PERSPECTIVE_UNITS[ $unit ];
+		$value             = round( max( $min, min( $max, $quantity ) ), 2 );
+
+		return $value > 0 ? self::format_css_number( $value ) . $unit : '';
+	}
+
+	/**
 	 * Build the CSS transform value from mlTransform3d values.
 	 *
 	 * Mirrors getTransform3dValue() in src/utils/transform3d.js. Returns an
@@ -831,8 +879,14 @@ class ML_Gutenberg_Customizations {
 			}
 
 			array_unshift( $functions, 'matrix3d(' . implode( ', ', $formatted ) . ')' );
-		} elseif ( $v['perspective'] > 0 ) {
-			array_unshift( $functions, "perspective({$css['perspective']}px)" );
+		} else {
+			$perspective = $this->parse_perspective(
+				array_key_exists( 'perspective', $transform ) ? $transform['perspective'] : 1000
+			);
+
+			if ( '' !== $perspective ) {
+				array_unshift( $functions, "perspective({$perspective})" );
+			}
 		}
 
 		return implode( ' ', $functions );
@@ -961,7 +1015,6 @@ class ML_Gutenberg_Customizations {
 		'scale'       => array( -1, 1, 0 ),
 		'opacity'     => array( 0, 1, 0 ),
 		'blur'        => array( 0, 50, 0 ),
-		'perspective' => array( 0, 10000, 1000 ),
 		'startOffset' => array( -100, 100, 0 ),
 		'endOffset'   => array( -100, 100, 0 ),
 		'smoothing'   => array( 0, 0.95, 0.15 ),
@@ -1043,6 +1096,10 @@ class ML_Gutenberg_Customizations {
 
 			$settings[ $key ] = $this->clamp_number( $raw[ $key ] ?? null, (float) $min, (float) $max, (float) $fallback );
 		}
+
+		$settings['perspective'] = $this->parse_perspective(
+			array_key_exists( 'perspective', $raw ) ? $raw['perspective'] : 1000
+		);
 
 		$settings['mode'] = in_array( $raw['mode'] ?? '', array( 'centered', 'progressive' ), true ) ? $raw['mode'] : 'centered';
 

@@ -24,6 +24,7 @@ import {
   readCorners,
 } from "../utils/corner-warp";
 import {
+  PERSPECTIVE_UNITS,
   TRANSFORM_3D_RANGES,
   TRANSLATE_UNITS,
   getTransform3dValue,
@@ -105,6 +106,13 @@ function TranslateControl({ axis, label, help, stored, value, onChange }) {
 }
 
 const CORNER_LABELS = ["Top left", "Top right", "Bottom left", "Bottom right"];
+
+const PERSPECTIVE_UNIT_OPTIONS = Object.keys(PERSPECTIVE_UNITS).map((unit) => ({
+  value: unit,
+  label: unit,
+  default: unit === "px" ? 1000 : 50,
+  step: PERSPECTIVE_UNITS[unit].step,
+}));
 
 export default function Transform3dPanel({ attributes, setAttributes, clientId }) {
   const stored = attributes.mlTransform3d || {};
@@ -208,20 +216,7 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
       key: "scale",
       label: __("Scale", "ml-gutenberg-customizations"),
     },
-    {
-      key: "perspective",
-      label: __("Perspective (px)", "ml-gutenberg-customizations"),
-      disabled: matrixActive,
-      help: matrixActive
-        ? __(
-            "Ignored while a matrix is set — a matrix carries its own perspective.",
-            "ml-gutenberg-customizations",
-          )
-        : __(
-            "Lower values exaggerate the 3D depth. 0 disables perspective.",
-            "ml-gutenberg-customizations",
-          ),
-    },
+
   ];
 
   const renderSlider = ({ key, label, step, help, disabled }) => (
@@ -282,6 +277,25 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
           ))}
 
           {otherSliders.map(renderSlider)}
+
+          <UnitControl
+            label={__("Perspective", "ml-gutenberg-customizations")}
+            help={
+              matrixActive
+                ? __(
+                    "Ignored while a matrix is set — a matrix carries its own perspective.",
+                    "ml-gutenberg-customizations",
+                  )
+                : __(
+                    "Lower values exaggerate the depth; empty or 0 turns it off. cq units measure against a container, so an ancestor needs a container type for them to mean anything.",
+                    "ml-gutenberg-customizations",
+                  )
+            }
+            value={t.perspective}
+            units={PERSPECTIVE_UNIT_OPTIONS}
+            disabled={matrixActive}
+            onChange={(value) => update({ perspective: value ?? "" })}
+          />
 
           {!warping && (
             <div>

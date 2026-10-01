@@ -3,6 +3,8 @@
  * Mirrored in PHP (ML_Gutenberg_Customizations) — keep both in sync.
  */
 
+import { parsePerspective } from "./transform3d";
+
 const round2 = (n) => Math.round(n * 100) / 100;
 const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
 
@@ -62,7 +64,6 @@ export const SCROLL_FX_RANGES = {
   scale: { min: -1, max: 1, step: 0.01, default: 0 },
   opacity: { min: 0, max: 1, step: 0.05, default: 0 },
   blur: { min: 0, max: 50, step: 0.1, default: 0 },
-  perspective: { min: 0, max: 10000, step: 1, default: 1000 },
   startOffset: { min: -100, max: 100, step: 1, default: 0 },
   endOffset: { min: -100, max: 100, step: 1, default: 0 },
   smoothing: { min: 0, max: 0.95, step: 0.05, default: 0.15 },
@@ -160,7 +161,9 @@ export function normalizeScrollFx(raw) {
     scale: value("scale"),
     opacity: value("opacity"),
     blur: value("blur"),
-    perspective: value("perspective"),
+    perspective: parsePerspective(
+      stored.perspective === undefined ? 1000 : stored.perspective,
+    ),
     mode: SCROLL_FX_MODES.includes(stored.mode) ? stored.mode : "centered",
     startOffset: value("startOffset"),
     endOffset: value("endOffset"),
@@ -283,8 +286,8 @@ export function getScrollFxState(fx, p) {
   const blur = Math.abs(round2(value(s.blur)));
   const parts = [];
 
-  if ((rx || ry) && s.perspective > 0) {
-    parts.push(`perspective(${s.perspective}px)`);
+  if ((rx || ry) && s.perspective) {
+    parts.push(`perspective(${s.perspective})`);
   }
   if (tx || ty) {
     parts.push(`translate3d(${tx}px, ${ty}px, 0px)`);

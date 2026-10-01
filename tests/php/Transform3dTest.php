@@ -172,6 +172,31 @@ final class Transform3dTest extends TestCase {
 		$this->assertStringContainsString( 'class="wp-block-paragraph ml-has-3d-transform ml-3d-desktop-only"', $updated );
 	}
 
+	public function test_perspective_takes_other_length_units(): void {
+		$this->assertStringContainsString(
+			'--ml-3d-transform:perspective(40vw) rotateY(30deg);',
+			$this->render( array( 'perspective' => '40vw', 'rotateY' => 30 ) )
+		);
+		$this->assertStringContainsString(
+			'--ml-3d-transform:perspective(25cqw) rotateY(30deg);',
+			$this->render( array( 'perspective' => '25CQW', 'rotateY' => 30 ) )
+		);
+	}
+
+	public function test_a_plain_perspective_number_is_pixels(): void {
+		$this->assertStringContainsString(
+			'--ml-3d-transform:perspective(800px) rotateY(30deg);',
+			$this->render( array( 'perspective' => 800, 'rotateY' => 30 ) )
+		);
+	}
+
+	public function test_an_unusable_perspective_unit_means_no_perspective(): void {
+		$this->assertStringContainsString(
+			'--ml-3d-transform:rotateY(30deg);',
+			$this->render( array( 'perspective' => '10pt', 'rotateY' => 30 ) )
+		);
+	}
+
 	// ── matrix3d ─────────────────────────────────────────────────────────────
 
 	public function test_a_pasted_matrix_renders_exactly_as_pasted(): void {

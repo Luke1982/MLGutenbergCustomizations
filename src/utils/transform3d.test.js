@@ -1,4 +1,6 @@
 import {
+  PERSPECTIVE_UNITS,
+  parsePerspective,
   getTransform3dOrigin,
   parseMatrix3d,
   getTransform3dValue,
@@ -155,6 +157,55 @@ describe("getTransform3dValue", () => {
   it("ignores non-finite values", () => {
     expect(getTransform3dValue({ rotateX: "1e400", rotateZ: 15 })).toBe(
       "perspective(1000px) rotateZ(15deg)",
+    );
+  });
+});
+
+describe("parsePerspective", () => {
+  it("reads a plain number as pixels", () => {
+    expect(parsePerspective(1000)).toBe("1000px");
+    expect(parsePerspective("800")).toBe("800px");
+  });
+
+  it("keeps viewport and container units", () => {
+    expect(parsePerspective("50vw")).toBe("50vw");
+    expect(parsePerspective("30CQW")).toBe("30cqw");
+    expect(parsePerspective("10rem")).toBe("10rem");
+  });
+
+  it("offers the units CSS allows on a length", () => {
+    expect(Object.keys(PERSPECTIVE_UNITS)).toEqual(
+      expect.arrayContaining(["px", "em", "rem", "vw", "vh", "cqw", "cqh"]),
+    );
+    expect(Object.keys(PERSPECTIVE_UNITS)).not.toContain("%");
+  });
+
+  it("clamps per unit", () => {
+    expect(parsePerspective("99999px")).toBe("10000px");
+    expect(parsePerspective("5000cqw")).toBe("500cqw");
+  });
+
+  it("treats nothing, junk and zero as no perspective", () => {
+    expect(parsePerspective("")).toBe("");
+    expect(parsePerspective("abc")).toBe("");
+    expect(parsePerspective("10pt")).toBe("");
+    expect(parsePerspective(0)).toBe("");
+  });
+});
+
+describe("getTransform3dValue with perspective units", () => {
+  it("writes the unit it was given", () => {
+    expect(getTransform3dValue({ rotateY: 30, perspective: "40vw" })).toBe(
+      "perspective(40vw) rotateY(30deg)",
+    );
+    expect(getTransform3dValue({ rotateY: 30, perspective: "25cqw" })).toBe(
+      "perspective(25cqw) rotateY(30deg)",
+    );
+  });
+
+  it("still understands a plain number as pixels", () => {
+    expect(getTransform3dValue({ rotateY: 30, perspective: 800 })).toBe(
+      "perspective(800px) rotateY(30deg)",
     );
   });
 });

@@ -156,7 +156,7 @@ final class ScrollAnimationTest extends TestCase {
 		$this->assertSame( 20, $data['rotateY'] );
 		$this->assertSame( 60, $data['translateY'] );
 		$this->assertSame( 'centered', $data['mode'] );
-		$this->assertSame( 1000, $data['perspective'] );
+		$this->assertSame( '1000px', $data['perspective'] );
 		$this->assertSame( 0.15, $data['smoothing'] );
 	}
 

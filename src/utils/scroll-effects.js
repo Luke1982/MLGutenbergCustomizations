@@ -54,15 +54,15 @@ export const REVEAL_AMOUNTS = {
 export const SCROLL_FX_MODES = ["centered", "progressive"];
 
 export const SCROLL_FX_RANGES = {
-  rotateX: { min: -180, max: 180, step: 1, default: 0 },
-  rotateY: { min: -180, max: 180, step: 1, default: 0 },
-  rotateZ: { min: -180, max: 180, step: 1, default: 0 },
-  translateX: { min: -1000, max: 1000, step: 5, default: 0 },
-  translateY: { min: -1000, max: 1000, step: 5, default: 0 },
+  rotateX: { min: -180, max: 180, step: 0.01, default: 0 },
+  rotateY: { min: -180, max: 180, step: 0.01, default: 0 },
+  rotateZ: { min: -180, max: 180, step: 0.01, default: 0 },
+  translateX: { min: -1000, max: 1000, step: 1, default: 0 },
+  translateY: { min: -1000, max: 1000, step: 1, default: 0 },
   scale: { min: -1, max: 1, step: 0.01, default: 0 },
   opacity: { min: 0, max: 1, step: 0.05, default: 0 },
-  blur: { min: 0, max: 50, step: 1, default: 0 },
-  perspective: { min: 0, max: 10000, step: 50, default: 1000 },
+  blur: { min: 0, max: 50, step: 0.1, default: 0 },
+  perspective: { min: 0, max: 10000, step: 1, default: 1000 },
   startOffset: { min: -100, max: 100, step: 1, default: 0 },
   endOffset: { min: -100, max: 100, step: 1, default: 0 },
   smoothing: { min: 0, max: 0.95, step: 0.05, default: 0.15 },

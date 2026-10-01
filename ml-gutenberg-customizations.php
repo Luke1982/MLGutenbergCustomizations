@@ -673,6 +673,14 @@ class ML_Gutenberg_Customizations {
 			? $transform['origin']
 			: 'center center';
 
+		// A matrix is measured from the block's top-left corner, which is what
+		// matrix generators and the corner warp both assume.
+		$matrix = $this->parse_matrix_3d( $transform['matrix'] ?? null );
+
+		if ( null !== $matrix && ! $this->is_identity_matrix_3d( $matrix ) ) {
+			$origin = '0 0';
+		}
+
 		$classes = 'ml-has-3d-transform';
 		if ( ! empty( $transform['disableOnMobile'] ) ) {
 			$classes .= ' ml-3d-desktop-only';

@@ -1,4 +1,5 @@
 import {
+  getTransform3dOrigin,
   parseMatrix3d,
   getTransform3dValue,
   getTransform3dWrapperProps,
@@ -240,10 +241,41 @@ describe("normalizeTransform3d", () => {
   });
 });
 
+describe("getTransform3dOrigin", () => {
+  const tilt = "matrix3d(0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)";
+
+  it("uses the chosen origin normally", () => {
+    expect(getTransform3dOrigin({ rotateZ: 10, origin: "top left" })).toBe("top left");
+    expect(getTransform3dOrigin({ rotateZ: 10 })).toBe("center center");
+  });
+
+  it("pins a matrix to the top-left corner, which is what it is measured from", () => {
+    expect(getTransform3dOrigin({ matrix: tilt, origin: "bottom right" })).toBe("0 0");
+  });
+
+  it("leaves the chosen origin alone when the matrix does nothing", () => {
+    expect(
+      getTransform3dOrigin({
+        matrix: "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)",
+        origin: "top left",
+      }),
+    ).toBe("top left");
+  });
+});
+
 describe("getTransform3dWrapperProps", () => {
   it("returns null when the block has no transform", () => {
     expect(getTransform3dWrapperProps(undefined)).toBeNull();
     expect(getTransform3dWrapperProps({ scale: 1 })).toBeNull();
+  });
+
+  it("sends the matrix origin through to the editor preview", () => {
+    expect(
+      getTransform3dWrapperProps({
+        matrix: "matrix3d(0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)",
+        origin: "bottom right",
+      }).style["--ml-3d-origin"],
+    ).toBe("0 0");
   });
 
   it("returns the frontend class and CSS variables", () => {

@@ -221,6 +221,17 @@ final class Transform3dTest extends TestCase {
 		);
 	}
 
+	public function test_a_matrix_is_measured_from_the_top_left_corner(): void {
+		$updated = $this->render(
+			array(
+				'matrix' => 'matrix3d(0.866025, 0.5, 0, 0, -0.5, 0.866025, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)',
+				'origin' => 'bottom right',
+			)
+		);
+
+		$this->assertStringContainsString( '--ml-3d-origin:0 0', $updated );
+	}
+
 	public function test_an_identity_matrix_changes_nothing(): void {
 		$block_content = '<p class="wp-block-paragraph">Hi</p>';
 

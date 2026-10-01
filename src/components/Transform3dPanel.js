@@ -16,7 +16,13 @@ import {
 import { __, sprintf } from "@wordpress/i18n";
 import { useRef } from "@wordpress/element";
 
-import { DEFAULT_CORNERS, matrixFromCorners } from "../utils/matrix-corners";
+import { DEFAULT_CORNERS } from "../utils/matrix-corners";
+import {
+  clampCorner,
+  cornerWarpUpdate,
+  hasCornerWarp,
+  readCorners,
+} from "../utils/corner-warp";
 import {
   TRANSFORM_3D_RANGES,
   TRANSLATE_UNITS,
@@ -100,32 +106,6 @@ function TranslateControl({ axis, label, help, stored, value, onChange }) {
 
 const CORNER_LABELS = ["Top left", "Top right", "Bottom left", "Bottom right"];
 
-const clampCorner = (n) => Math.min(1.5, Math.max(-0.5, Math.round(n * 100) / 100));
-
-function readCorners(stored) {
-  if (
-    Array.isArray(stored) &&
-    stored.length === 4 &&
-    stored.every((c) => Array.isArray(c) && c.length === 2 && c.every(Number.isFinite))
-  ) {
-    return stored;
-  }
-
-  return DEFAULT_CORNERS;
-}
-
-/**
- * The block's untransformed size in the editor canvas, which the warp is
- * measured against.
- */
-function blockSize(clientId) {
-  const canvas = document.querySelector('iframe[name="editor-canvas"]');
-  const doc = canvas?.contentDocument || document;
-  const el = doc.querySelector(`[data-block="${clientId}"]`);
-
-  return el ? { width: el.offsetWidth, height: el.offsetHeight } : null;
-}
-
 export default function Transform3dPanel({ attributes, setAttributes, clientId }) {
   const stored = attributes.mlTransform3d || {};
   const t = normalizeTransform3d(stored);
@@ -146,16 +126,12 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
   }
 
   const surfaceRef = useRef(null);
-  const corners = readCorners(stored.corners);
+  const corners = readCorners(stored);
+  const warping = hasCornerWarp(stored);
 
   // Dragging a corner recomputes the matrix against the block's real size in
   // the canvas, so the warp matches what is on screen.
-  const setCorners = (next) => {
-    const size = blockSize(clientId);
-    const warp = size ? matrixFromCorners(next, size.width, size.height) : null;
-
-    update({ corners: next, matrix: warp || "" });
-  };
+  const setCorners = (next) => update(cornerWarpUpdate(clientId, next));
 
   const setCorner = (index, axis, value) => {
     const number = Number(value);
@@ -231,12 +207,10 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
     {
       key: "scale",
       label: __("Scale", "ml-gutenberg-customizations"),
-      step: 0.01,
     },
     {
       key: "perspective",
       label: __("Perspective (px)", "ml-gutenberg-customizations"),
-      step: 10,
       disabled: matrixActive,
       help: matrixActive
         ? __(
@@ -250,7 +224,7 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
     },
   ];
 
-  const renderSlider = ({ key, label, step = 1, help, disabled }) => (
+  const renderSlider = ({ key, label, step, help, disabled }) => (
     <RangeControl
       key={key}
       label={label}
@@ -260,7 +234,7 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
       onChange={(value) => update({ [key]: value })}
       min={TRANSFORM_3D_RANGES[key].min}
       max={TRANSFORM_3D_RANGES[key].max}
-      step={step}
+      step={step ?? TRANSFORM_3D_RANGES[key].step ?? 1}
       allowReset
       resetFallbackValue={TRANSFORM_3D_RANGES[key].default}
       __nextHasNoMarginBottom
@@ -309,9 +283,21 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
 
           {otherSliders.map(renderSlider)}
 
+          {!warping && (
+            <div>
+              <Button
+                variant="secondary"
+                onClick={() => setCorners(DEFAULT_CORNERS)}
+              >
+                {__("Warp the corners", "ml-gutenberg-customizations")}
+              </Button>
+            </div>
+          )}
+
+          {warping && (
           <BaseControl
             help={__(
-              "Drag the corners to warp the block. Off a rectangle you get perspective, which the sliders above cannot do.",
+              "Drag the corners on the block itself, or here. Off a rectangle you get perspective, which the sliders above cannot do.",
               "ml-gutenberg-customizations",
             )}
             __nextHasNoMarginBottom
@@ -382,7 +368,7 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
                       CORNER_LABELS[index],
                     )}
                     value={x}
-                    step={0.05}
+                    step={0.01}
                     min={-0.5}
                     max={1.5}
                     onChange={(next) => setCorner(index, 0, next)}
@@ -395,7 +381,7 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
                       CORNER_LABELS[index],
                     )}
                     value={y}
-                    step={0.05}
+                    step={0.01}
                     min={-0.5}
                     max={1.5}
                     onChange={(next) => setCorner(index, 1, next)}
@@ -405,6 +391,7 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
               ))}
             </div>
           </BaseControl>
+          )}
 
           <TextControl
             label={__("Paste a matrix", "ml-gutenberg-customizations")}
@@ -428,7 +415,7 @@ export default function Transform3dPanel({ attributes, setAttributes, clientId }
               <Button
                 variant="tertiary"
                 isDestructive
-                onClick={() => update({ matrix: "", corners: DEFAULT_CORNERS })}
+                onClick={() => update({ matrix: "", corners: undefined })}
               >
                 {__("Reset the warp", "ml-gutenberg-customizations")}
               </Button>

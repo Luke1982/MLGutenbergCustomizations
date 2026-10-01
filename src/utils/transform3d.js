@@ -3,24 +3,26 @@
  * Mirrored in PHP (TRANSFORM_3D_RANGES) — keep both in sync.
  */
 export const TRANSFORM_3D_RANGES = {
-  perspective: { min: 0, max: 10000, default: 1000 },
-  rotateX: { min: -180, max: 180, default: 0 },
-  rotateY: { min: -180, max: 180, default: 0 },
-  rotateZ: { min: -180, max: 180, default: 0 },
-  scale: { min: 0, max: 3, default: 1 },
+  perspective: { min: 0, max: 10000, step: 1, default: 1000 },
+  rotateX: { min: -180, max: 180, step: 0.01, default: 0 },
+  rotateY: { min: -180, max: 180, step: 0.01, default: 0 },
+  rotateZ: { min: -180, max: 180, step: 0.01, default: 0 },
+  scale: { min: 0, max: 3, step: 0.01, default: 1 },
 };
 
 /**
  * Translate units and their slider ranges.
  * Mirrored in PHP (TRANSFORM_3D_TRANSLATE_UNITS) — keep both in sync.
  */
+// "any" lets a typed value be as precise as it likes while the slider and
+// the arrow keys still move in sensible whole steps.
 export const TRANSLATE_UNITS = {
-  px: { min: -2000, max: 2000, step: 1 },
-  "%": { min: -500, max: 500, step: 1 },
-  em: { min: -100, max: 100, step: 0.1 },
-  rem: { min: -100, max: 100, step: 0.1 },
-  vw: { min: -100, max: 100, step: 1 },
-  vh: { min: -100, max: 100, step: 1 },
+  px: { min: -2000, max: 2000, step: "any" },
+  "%": { min: -500, max: 500, step: "any" },
+  em: { min: -100, max: 100, step: "any" },
+  rem: { min: -100, max: 100, step: "any" },
+  vw: { min: -100, max: 100, step: "any" },
+  vh: { min: -100, max: 100, step: "any" },
 };
 
 export const TRANSLATE_AXES = ["translateX", "translateY", "translateZ"];
@@ -221,6 +223,23 @@ export function getTransform3dValue(raw) {
 }
 
 /**
+ * The transform-origin to output.
+ *
+ * A matrix is measured from the block's top-left corner — that is the
+ * convention matrix generators and the corner warp both use — so an active
+ * matrix pins the origin there regardless of what the grid says.
+ */
+export function getTransform3dOrigin(raw) {
+  const values = normalizeTransform3d(raw);
+
+  if (values.matrix && !isIdentityMatrix(values.matrix)) {
+    return "0 0";
+  }
+
+  return values.origin;
+}
+
+/**
  * Build the editor wrapper props for the live preview: the same class and
  * CSS variables the frontend render filter outputs. A static editor
  * stylesheet (enqueued in PHP) maps them to transform / transform-origin.
@@ -234,7 +253,8 @@ export function getTransform3dWrapperProps(raw) {
     return null;
   }
 
-  const { origin, disableOnMobile } = normalizeTransform3d(raw);
+  const { disableOnMobile } = normalizeTransform3d(raw);
+  const origin = getTransform3dOrigin(raw);
 
   return {
     className: disableOnMobile

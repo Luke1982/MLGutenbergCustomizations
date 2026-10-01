@@ -11,13 +11,14 @@ export const POSITION_TYPES = ["relative", "absolute", "fixed", "sticky"];
 /**
  * Units an offset may use, and how far each one may go.
  */
+// "any" keeps typing free; the arrows still move in whole units.
 export const INSET_UNITS = {
-  px: { min: -2000, max: 2000, step: 1 },
-  "%": { min: -200, max: 200, step: 1 },
-  em: { min: -100, max: 100, step: 0.1 },
-  rem: { min: -100, max: 100, step: 0.1 },
-  vw: { min: -100, max: 100, step: 1 },
-  vh: { min: -100, max: 100, step: 1 },
+  px: { min: -2000, max: 2000, step: "any" },
+  "%": { min: -200, max: 200, step: "any" },
+  em: { min: -100, max: 100, step: "any" },
+  rem: { min: -100, max: 100, step: "any" },
+  vw: { min: -100, max: 100, step: "any" },
+  vh: { min: -100, max: 100, step: "any" },
 };
 
 export const INSET_SIDES = ["top", "right", "bottom", "left"];

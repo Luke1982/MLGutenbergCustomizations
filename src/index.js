@@ -27,6 +27,7 @@ import ScrollBehaviorPanel from "./components/ScrollBehaviorPanel";
 import LinkToolbar from "./components/LinkToolbar";
 import CoverVerticalAlignToolbar from "./components/CoverVerticalAlignToolbar";
 import Transform3dPanel from "./components/Transform3dPanel";
+import CornerWarpOverlay from "./components/CornerWarpOverlay";
 import ScrollAnimationPanel from "./components/ScrollAnimationPanel";
 import TypewriterPanel from "./components/TypewriterPanel";
 import FiltersPanel from "./components/FiltersPanel";
@@ -41,6 +42,7 @@ import {
   supportsTransform3d,
 } from "./utils/transform3d";
 import { getFilterValue, isBackdrop } from "./utils/filters";
+import { hasCornerWarp } from "./utils/corner-warp";
 import { getPositionStyles } from "./utils/position";
 
 import "./style.scss";
@@ -380,6 +382,13 @@ const withTransform3dControls = createHigherOrderComponent((BlockEdit) => {
             attributes={props.attributes}
             setAttributes={props.setAttributes}
             clientId={props.clientId}
+          />
+        )}
+        {props.isSelected && hasCornerWarp(props.attributes.mlTransform3d) && (
+          <CornerWarpOverlay
+            clientId={props.clientId}
+            attributes={props.attributes}
+            setAttributes={props.setAttributes}
           />
         )}
       </>

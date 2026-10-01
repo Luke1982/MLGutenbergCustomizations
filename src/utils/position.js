@@ -30,7 +30,13 @@ export const Z_INDEX_RANGE = { min: -999, max: 999, step: 1 };
  * back clamped to its unit's range. Anything unusable becomes an empty
  * string, which leaves the side at auto.
  */
+export const AUTO = "auto";
+
 export function parseInset(raw) {
+  if (typeof raw === "string" && raw.trim().toLowerCase() === AUTO) {
+    return AUTO;
+  }
+
   let quantity = NaN;
   let unit = "px";
 

@@ -23,12 +23,16 @@ import {
 const UnitControl = StableUnitControl ?? ExperimentalUnitControl;
 const NumberControl = StableNumberControl ?? ExperimentalNumberControl;
 
-const UNITS = Object.keys(INSET_UNITS).map((unit) => ({
-  value: unit,
-  label: unit,
-  default: 0,
-  step: INSET_UNITS[unit].step,
-}));
+const UNITS = [
+  ...Object.keys(INSET_UNITS).map((unit) => ({
+    value: unit,
+    label: unit,
+    default: 0,
+    step: INSET_UNITS[unit].step,
+  })),
+  // Picking this leaves the side to the browser, same as leaving it empty.
+  { value: "auto", label: "auto", default: 0 },
+];
 
 export default function PositionPanel({ attributes, setAttributes }) {
   const stored = attributes.mlPosition || {};
@@ -104,7 +108,7 @@ export default function PositionPanel({ attributes, setAttributes }) {
             <>
               <BaseControl
                 help={__(
-                  "Leave a side empty to let it size itself.",
+                  "Leave a side empty, or pick auto as its unit, to let the browser decide it.",
                   "ml-gutenberg-customizations",
                 )}
                 __nextHasNoMarginBottom
@@ -125,7 +129,14 @@ export default function PositionPanel({ attributes, setAttributes }) {
                       label={sideLabels[side]}
                       value={stored[side] ?? ""}
                       units={UNITS}
-                      onChange={(value) => update({ [side]: value ?? "" })}
+                      placeholder={__("auto", "ml-gutenberg-customizations")}
+                      onChange={(value) =>
+                        update({
+                          [side]: /auto$/i.test(value || "")
+                            ? "auto"
+                            : value ?? "",
+                        })
+                      }
                     />
                   ))}
                 </div>

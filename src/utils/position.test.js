@@ -47,6 +47,12 @@ describe("parseInset", () => {
     expect(parseInset("5VH")).toBe("5vh");
   });
 
+  it("keeps an explicit auto", () => {
+    expect(parseInset("auto")).toBe("auto");
+    expect(parseInset("AUTO")).toBe("auto");
+    expect(parseInset("  auto ")).toBe("auto");
+  });
+
   it("treats an empty value as auto", () => {
     expect(parseInset("")).toBe("");
     expect(parseInset(undefined)).toBe("");
@@ -69,6 +75,16 @@ describe("getPositionStyles", () => {
   it("returns nothing while the block sits in the normal flow", () => {
     expect(getPositionStyles({})).toBeNull();
     expect(getPositionStyles({ top: "20px" })).toBeNull();
+  });
+
+  it("writes an explicit auto through to CSS", () => {
+    expect(
+      getPositionStyles({ type: "absolute", top: "auto", left: "10px" }).style,
+    ).toEqual({
+      "--ml-position": "absolute",
+      "--ml-top": "auto",
+      "--ml-left": "10px",
+    });
   });
 
   it("carries the position and only the offsets that are set", () => {

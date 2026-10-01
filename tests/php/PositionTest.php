@@ -95,6 +95,18 @@ final class PositionTest extends TestCase {
 		$this->assertStringContainsString( '--ml-left:-200%', $updated );
 	}
 
+	public function test_a_side_can_be_set_to_auto_explicitly(): void {
+		$updated = $this->render(
+			array(
+				'type' => 'absolute',
+				'top'  => 'AUTO',
+				'left' => '10px',
+			)
+		);
+
+		$this->assertStringContainsString( '--ml-position:absolute;--ml-top:auto;--ml-left:10px', $updated );
+	}
+
 	public function test_unusable_offsets_are_left_at_auto(): void {
 		$updated = $this->render(
 			array(

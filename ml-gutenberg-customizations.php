@@ -1679,6 +1679,10 @@ class ML_Gutenberg_Customizations {
 	 * @return string CSS length, or an empty string.
 	 */
 	private function parse_inset( $raw ): string {
+		if ( is_string( $raw ) && 'auto' === strtolower( trim( $raw ) ) ) {
+			return 'auto';
+		}
+
 		$quantity = null;
 		$unit     = 'px';
 

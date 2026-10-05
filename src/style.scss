@@ -61,3 +61,18 @@ $value in $justify-map {
 .has-mobile-hidden {
     display: none !important;
 }
+
+// ── Mobile background ───────────────────────────────────────────────
+// Values come from inline custom properties; this stylesheet is already
+// scoped to the mobile breakpoint by its media attribute.
+.has-mobile-bg-hidden {
+    background-image: none !important;
+}
+
+.has-mobile-bg-size {
+    background-size: var(--ml-mobile-bg-size) !important;
+}
+
+.has-mobile-bg-position {
+    background-position: var(--ml-mobile-bg-position) !important;
+}

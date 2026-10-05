@@ -22,6 +22,7 @@ import { useSelect } from "@wordpress/data";
 import { store as coreDataStore } from "@wordpress/core-data";
 
 import MobileSpacingPanel from "./components/MobileSpacingPanel";
+import MobileBackgroundPanel from "./components/MobileBackgroundPanel";
 import VisibilityPanel from "./components/VisibilityPanel";
 import ScrollBehaviorPanel from "./components/ScrollBehaviorPanel";
 import LinkToolbar from "./components/LinkToolbar";
@@ -88,6 +89,10 @@ addFilter(
         mlMobileFlexBasis: {
           type: "string",
           default: "",
+        },
+        mlMobileBackground: {
+          type: "object",
+          default: {},
         },
         mlMobileBreakpoint: {
           type: "number",
@@ -215,6 +220,10 @@ const withMobileSpacingControls = createHigherOrderComponent((BlockEdit) => {
       <>
         <BlockEdit {...props} />
         <MobileSpacingPanel
+          attributes={props.attributes}
+          setAttributes={props.setAttributes}
+        />
+        <MobileBackgroundPanel
           attributes={props.attributes}
           setAttributes={props.setAttributes}
         />

@@ -248,9 +248,11 @@ class ML_Gutenberg_Customizations {
 		$has_custom_bp             = $custom_bp > 0;
 		$scroll_behavior           = is_array( $attrs['mlScrollBehavior'] ?? null ) ? $attrs['mlScrollBehavior'] : array();
 		$has_scroll                = ! empty( $scroll_behavior['enabled'] );
+		$mobile_background         = $this->normalize_mobile_background( is_array( $attrs['mlMobileBackground'] ?? null ) ? $attrs['mlMobileBackground'] : array() );
 		$sides                     = array( 'top', 'right', 'bottom', 'left' );
 		$classes                   = array();
 		$inline_rules              = array();
+		$background_vars           = array();
 
 		if ( empty( $link_url ) && $link_type ) {
 			if ( 'post' === $link_type ) {
@@ -376,6 +378,14 @@ class ML_Gutenberg_Customizations {
 			$inline_rules[] = 'flex-basis:' . esc_attr( $flex_basis ) . ' !important';
 		}
 
+		if ( $has_custom_bp ) {
+			$inline_rules = array_merge( $inline_rules, $this->get_mobile_background_rules( $mobile_background ) );
+		} else {
+			$background_styles = $this->get_mobile_background_styles( $mobile_background );
+			$classes           = array_merge( $classes, $background_styles['classes'] );
+			$background_vars   = $background_styles['vars'];
+		}
+
 		if ( empty( $classes ) && empty( $inline_rules ) && empty( $custom_margin_declarations ) && empty( $flex_basis ) && empty( $custom_min_width ) && ! $is_hidden && 'all' === $visibility && empty( $link_url ) && ! $has_scroll ) {
 			return $block_content;
 		}
@@ -481,6 +491,15 @@ class ML_Gutenberg_Customizations {
 			if ( $flex_basis && ! $has_custom_bp ) {
 				$existing_style = $processor->get_attribute( 'style' ) ?? '';
 				$var_decl       = '--ml-mobile-flex-basis:' . esc_attr( $flex_basis );
+				$full_style     = $existing_style
+					? rtrim( $existing_style, ';' ) . ';' . $var_decl
+					: $var_decl;
+				$processor->set_attribute( 'style', $full_style );
+			}
+
+			foreach ( $background_vars as $name => $value ) {
+				$existing_style = $processor->get_attribute( 'style' ) ?? '';
+				$var_decl       = $name . ':' . $value;
 				$full_style     = $existing_style
 					? rtrim( $existing_style, ';' ) . ';' . $var_decl
 					: $var_decl;
@@ -1800,6 +1819,101 @@ class ML_Gutenberg_Customizations {
 		wp_register_style( 'ml-gutenberg-position-editor', false, array(), '1.0' );
 		wp_enqueue_style( 'ml-gutenberg-position-editor' );
 		wp_add_inline_style( 'ml-gutenberg-position-editor', $this->get_position_css( '[data-block]', ' !important' ) );
+	}
+
+	/**
+	 * Background sizes the mobile controls offer.
+	 */
+	private const MOBILE_BACKGROUND_SIZES = array( 'cover', 'contain', 'auto' );
+
+	/**
+	 * Sanitize the mlMobileBackground attribute.
+	 *
+	 * Mirrors normalizeMobileBackground() in src/utils/mobile-background.js.
+	 *
+	 * @param array $raw Stored attribute.
+	 * @return array{hide: bool, size: string, position: ?array} Settings.
+	 */
+	private function normalize_mobile_background( array $raw ): array {
+		$point     = $raw['position'] ?? null;
+		$has_point = is_array( $point ) && is_numeric( $point['x'] ?? null ) && is_numeric( $point['y'] ?? null );
+
+		return array(
+			'hide'     => ! empty( $raw['hide'] ),
+			'size'     => in_array( $raw['size'] ?? '', self::MOBILE_BACKGROUND_SIZES, true ) ? $raw['size'] : '',
+			'position' => $has_point
+				? array(
+					'x' => round( max( 0, min( 1, (float) $point['x'] ) ), 2 ),
+					'y' => round( max( 0, min( 1, (float) $point['y'] ) ), 2 ),
+				)
+				: null,
+		);
+	}
+
+	/**
+	 * The focal point as a CSS background-position.
+	 *
+	 * @param array $position Focal point with x and y between 0 and 1.
+	 * @return string CSS value.
+	 */
+	private function mobile_background_position( array $position ): string {
+		return self::format_css_number( round( $position['x'] * 100, 2 ) ) . '% '
+			. self::format_css_number( round( $position['y'] * 100, 2 ) ) . '%';
+	}
+
+	/**
+	 * Classes and custom properties for the global breakpoint, where the
+	 * mobile stylesheet is already scoped to the viewport.
+	 *
+	 * @param array $background Sanitized settings.
+	 * @return array{classes: array, vars: array} Classes and variables.
+	 */
+	private function get_mobile_background_styles( array $background ): array {
+		$classes = array();
+		$vars    = array();
+
+		if ( $background['hide'] ) {
+			$classes[] = 'has-mobile-bg-hidden';
+		}
+
+		if ( '' !== $background['size'] ) {
+			$classes[]                   = 'has-mobile-bg-size';
+			$vars['--ml-mobile-bg-size'] = $background['size'];
+		}
+
+		if ( null !== $background['position'] ) {
+			$classes[]                       = 'has-mobile-bg-position';
+			$vars['--ml-mobile-bg-position'] = $this->mobile_background_position( $background['position'] );
+		}
+
+		return array(
+			'classes' => $classes,
+			'vars'    => $vars,
+		);
+	}
+
+	/**
+	 * The same settings as declarations, for a block with its own breakpoint.
+	 *
+	 * @param array $background Sanitized settings.
+	 * @return array CSS declarations.
+	 */
+	private function get_mobile_background_rules( array $background ): array {
+		$rules = array();
+
+		if ( $background['hide'] ) {
+			$rules[] = 'background-image:none !important';
+		}
+
+		if ( '' !== $background['size'] ) {
+			$rules[] = 'background-size:' . $background['size'] . ' !important';
+		}
+
+		if ( null !== $background['position'] ) {
+			$rules[] = 'background-position:' . $this->mobile_background_position( $background['position'] ) . ' !important';
+		}
+
+		return $rules;
 	}
 
 	/**

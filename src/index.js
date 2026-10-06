@@ -33,6 +33,7 @@ import ScrollAnimationPanel from "./components/ScrollAnimationPanel";
 import TypewriterPanel from "./components/TypewriterPanel";
 import FiltersPanel from "./components/FiltersPanel";
 import PositionPanel from "./components/PositionPanel";
+import TextGradientPanel from "./components/TextGradientPanel";
 import {
   getMobileSpacingClasses,
   getCustomMarginCSS,
@@ -45,6 +46,7 @@ import {
 import { getFilterValue, isBackdrop } from "./utils/filters";
 import { hasCornerWarp } from "./utils/corner-warp";
 import { getPositionStyles } from "./utils/position";
+import { getTextGradientProps } from "./utils/text-gradient";
 
 import "./style.scss";
 
@@ -741,6 +743,109 @@ addFilter(
   "editor.BlockListBlock",
   "ml-gutenberg-customizations/position-editor-wrapper",
   withPositionEditorWrapper,
+);
+
+/**
+ * Blocks whose content is text, and so can carry a gradient in the glyphs.
+ */
+const TEXT_BLOCKS = [
+  "core/paragraph",
+  "core/heading",
+  "core/list",
+  "core/list-item",
+  "core/quote",
+  "core/pullquote",
+  "core/verse",
+  "core/preformatted",
+  "core/code",
+  "core/button",
+  "core/post-title",
+  "core/site-title",
+  "core/site-tagline",
+];
+
+addFilter(
+  "blocks.registerBlockType",
+  "ml-gutenberg-customizations/text-gradient-attribute",
+  (settings, name) => {
+    if (!TEXT_BLOCKS.includes(name)) {
+      return settings;
+    }
+
+    return {
+      ...settings,
+      attributes: {
+        ...settings.attributes,
+        mlTextGradient: {
+          type: "string",
+          default: "",
+        },
+      },
+    };
+  },
+);
+
+const withTextGradientControls = createHigherOrderComponent((BlockEdit) => {
+  return (props) => {
+    if (!TEXT_BLOCKS.includes(props.name)) {
+      return <BlockEdit {...props} />;
+    }
+
+    return (
+      <>
+        <BlockEdit {...props} />
+        {props.isSelected && (
+          <TextGradientPanel
+            attributes={props.attributes}
+            setAttributes={props.setAttributes}
+          />
+        )}
+      </>
+    );
+  };
+}, "withTextGradientControls");
+
+addFilter(
+  "editor.BlockEdit",
+  "ml-gutenberg-customizations/text-gradient-controls",
+  withTextGradientControls,
+);
+
+/**
+ * Live editor preview for the gradient text.
+ */
+const withTextGradientEditorWrapper = createHigherOrderComponent(
+  (BlockListBlock) => {
+    return (props) => {
+      const gradient = getTextGradientProps(props.attributes?.mlTextGradient);
+
+      if (!gradient) {
+        return <BlockListBlock {...props} />;
+      }
+
+      const wrapperProps = props.wrapperProps || {};
+
+      return (
+        <BlockListBlock
+          {...props}
+          wrapperProps={{
+            ...wrapperProps,
+            className: [wrapperProps.className, gradient.className]
+              .filter(Boolean)
+              .join(" "),
+            style: { ...wrapperProps.style, ...gradient.style },
+          }}
+        />
+      );
+    };
+  },
+  "withTextGradientEditorWrapper",
+);
+
+addFilter(
+  "editor.BlockListBlock",
+  "ml-gutenberg-customizations/text-gradient-editor-wrapper",
+  withTextGradientEditorWrapper,
 );
 
 registerBlockType("ml/term-image", {

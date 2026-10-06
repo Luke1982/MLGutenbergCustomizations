@@ -76,6 +76,12 @@ class ML_Gutenberg_Customizations {
 		add_filter( 'render_block', array( $this, 'apply_position' ), 10, 2 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_position_styles' ) );
 		add_action( 'enqueue_block_assets', array( $this, 'enqueue_position_editor_styles' ) );
+
+		// Gradient-filled text.
+		add_filter( 'register_block_type_args', array( $this, 'register_text_gradient_attribute' ) );
+		add_filter( 'render_block', array( $this, 'apply_text_gradient' ), 10, 2 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_text_gradient_styles' ) );
+		add_action( 'enqueue_block_assets', array( $this, 'enqueue_text_gradient_editor_styles' ) );
 	}
 
 	/**
@@ -1914,6 +1920,138 @@ class ML_Gutenberg_Customizations {
 		}
 
 		return $rules;
+	}
+
+	/**
+	 * Register the text gradient attribute server-side on every block, so
+	 * ServerSideRender previews accept it.
+	 *
+	 * @param array $args Block type registration arguments.
+	 * @return array Arguments with the mlTextGradient attribute added.
+	 */
+	public function register_text_gradient_attribute( array $args ): array {
+		$args['attributes'] = is_array( $args['attributes'] ?? null ) ? $args['attributes'] : array();
+
+		$args['attributes']['mlTextGradient'] = array( 'type' => 'string' );
+
+		return $args;
+	}
+
+	/**
+	 * Sanitize a stored gradient.
+	 *
+	 * Mirrors sanitizeTextGradient() in src/utils/text-gradient.js. The value
+	 * ends up inside a style attribute, so only the gradient functions are
+	 * allowed, and anything that could close the declaration, start a comment
+	 * or load a URL is refused outright.
+	 *
+	 * @param mixed $raw Stored value.
+	 * @return string The gradient, or an empty string.
+	 */
+	private function sanitize_text_gradient( $raw ): string {
+		if ( ! is_string( $raw ) ) {
+			return '';
+		}
+
+		$value = trim( $raw );
+
+		if ( '' === $value || strlen( $value ) > 1000 ) {
+			return '';
+		}
+
+		if ( preg_match( '#url\s*\(|expression\s*\(|/\*|\*/|@|;|\{|\}#i', $value ) ) {
+			return '';
+		}
+
+		if ( ! preg_match( '/^(repeating-)?(linear|radial|conic)-gradient\([^;{}<>\\\\]*\)$/i', $value ) ) {
+			return '';
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Fill a block's text with a gradient.
+	 *
+	 * The gradient travels as a custom property; the stylesheet clips it to
+	 * the glyphs.
+	 *
+	 * @param string $block_content The block's rendered HTML.
+	 * @param array  $block         The parsed block data.
+	 * @return string Modified block HTML.
+	 */
+	public function apply_text_gradient( string $block_content, array $block ): string {
+		$gradient = $this->sanitize_text_gradient( $block['attrs']['mlTextGradient'] ?? null );
+
+		if ( '' === $gradient ) {
+			return $block_content;
+		}
+
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
+
+		do {
+			if ( ! $processor->next_tag() ) {
+				return $block_content;
+			}
+		} while ( in_array( $processor->get_tag(), self::TRANSFORM_3D_SKIPPED_TAGS, true ) );
+
+		$existing_class = $processor->get_attribute( 'class' ) ?? '';
+		$processor->set_attribute( 'class', trim( $existing_class . ' ml-has-text-gradient' ) );
+
+		$existing_style = $processor->get_attribute( 'style' ) ?? '';
+		$declaration    = '--ml-text-gradient:' . $gradient;
+		$processor->set_attribute(
+			'style',
+			$existing_style ? rtrim( $existing_style, ';' ) . ';' . $declaration : $declaration
+		);
+
+		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Build the stylesheet that clips the gradient to the text.
+	 *
+	 * Wrapped in @supports so a browser without background-clip simply keeps
+	 * its ordinary text colour instead of showing nothing at all.
+	 *
+	 * @param string $prefix    Selector prefix ('' on the frontend).
+	 * @param string $important Either '' or ' !important'.
+	 * @return string CSS rules.
+	 */
+	private function get_text_gradient_css( string $prefix, string $important ): string {
+		return sprintf(
+			'@supports (background-clip:text) or (-webkit-background-clip:text){'
+			. '%1$s.ml-has-text-gradient{background-image:var(--ml-text-gradient)%2$s;'
+			. '-webkit-background-clip:text%2$s;background-clip:text%2$s;'
+			. 'color:transparent%2$s;-webkit-text-fill-color:transparent%2$s}}',
+			$prefix,
+			$important
+		);
+	}
+
+	/**
+	 * Enqueue the frontend gradient text stylesheet.
+	 */
+	public function enqueue_text_gradient_styles(): void {
+		wp_register_style( 'ml-gutenberg-text-gradient', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-text-gradient' );
+		wp_add_inline_style( 'ml-gutenberg-text-gradient', $this->get_text_gradient_css( '', '' ) );
+	}
+
+	/**
+	 * Enqueue the editor gradient text stylesheet, scoped to block wrappers.
+	 */
+	public function enqueue_text_gradient_editor_styles(): void {
+		if ( ! is_admin() ) {
+			return;
+		}
+
+		wp_register_style( 'ml-gutenberg-text-gradient-editor', false, array(), '1.0' );
+		wp_enqueue_style( 'ml-gutenberg-text-gradient-editor' );
+		wp_add_inline_style(
+			'ml-gutenberg-text-gradient-editor',
+			$this->get_text_gradient_css( '[data-block]', ' !important' )
+		);
 	}
 
 	/**

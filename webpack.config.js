@@ -7,5 +7,6 @@ module.exports = {
     "scroll-behavior": "./src/scroll-behavior.js",
     "scroll-effects": "./src/scroll-effects.js",
     typewriter: "./src/typewriter.js",
+    animations: "./src/animations.js",
   },
 };

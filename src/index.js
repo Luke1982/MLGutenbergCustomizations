@@ -34,6 +34,7 @@ import TypewriterPanel from "./components/TypewriterPanel";
 import FiltersPanel from "./components/FiltersPanel";
 import PositionPanel from "./components/PositionPanel";
 import TextGradientPanel from "./components/TextGradientPanel";
+import AnimationPanel from "./components/AnimationPanel";
 import {
   getMobileSpacingClasses,
   getCustomMarginCSS,
@@ -47,6 +48,7 @@ import { getFilterValue, isBackdrop } from "./utils/filters";
 import { hasCornerWarp } from "./utils/corner-warp";
 import { getPositionStyles } from "./utils/position";
 import { getTextGradientProps } from "./utils/text-gradient";
+import { getAnimationProps } from "./utils/animations";
 
 import "./style.scss";
 
@@ -846,6 +848,93 @@ addFilter(
   "editor.BlockListBlock",
   "ml-gutenberg-customizations/text-gradient-editor-wrapper",
   withTextGradientEditorWrapper,
+);
+
+/**
+ * Animations, on every block that has a wrapper to animate.
+ */
+addFilter(
+  "blocks.registerBlockType",
+  "ml-gutenberg-customizations/animation-attribute",
+  (settings) => {
+    if (!supportsTransform3d(settings)) {
+      return settings;
+    }
+
+    return {
+      ...settings,
+      attributes: {
+        ...settings.attributes,
+        mlAnimation: {
+          type: "object",
+          default: {},
+        },
+      },
+    };
+  },
+);
+
+const withAnimationControls = createHigherOrderComponent((BlockEdit) => {
+  return (props) => {
+    if (!supportsTransform3d(getBlockType(props.name))) {
+      return <BlockEdit {...props} />;
+    }
+
+    return (
+      <>
+        <BlockEdit {...props} />
+        {props.isSelected && (
+          <AnimationPanel
+            attributes={props.attributes}
+            setAttributes={props.setAttributes}
+          />
+        )}
+      </>
+    );
+  };
+}, "withAnimationControls");
+
+addFilter(
+  "editor.BlockEdit",
+  "ml-gutenberg-customizations/animation-controls",
+  withAnimationControls,
+);
+
+/**
+ * Live editor preview: the block animates while you set it up.
+ */
+const withAnimationEditorWrapper = createHigherOrderComponent(
+  (BlockListBlock) => {
+    return (props) => {
+      const animation = getAnimationProps(props.attributes?.mlAnimation);
+
+      if (!animation) {
+        return <BlockListBlock {...props} />;
+      }
+
+      const wrapperProps = props.wrapperProps || {};
+
+      return (
+        <BlockListBlock
+          {...props}
+          wrapperProps={{
+            ...wrapperProps,
+            className: [wrapperProps.className, animation.className]
+              .filter(Boolean)
+              .join(" "),
+            style: { ...wrapperProps.style, ...animation.style },
+          }}
+        />
+      );
+    };
+  },
+  "withAnimationEditorWrapper",
+);
+
+addFilter(
+  "editor.BlockListBlock",
+  "ml-gutenberg-customizations/animation-editor-wrapper",
+  withAnimationEditorWrapper,
 );
 
 registerBlockType("ml/term-image", {

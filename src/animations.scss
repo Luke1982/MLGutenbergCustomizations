@@ -1,0 +1,367 @@
+// Attention-seeker animations.
+//
+// Written here rather than pulled from a library: Animate.css is Hippocratic
+// licensed, which does not sit with a GPL plugin, and no ready-made set lets
+// the amplitude be dialled up or down. Every movement below is multiplied by
+// --ml-anim-strength, so one slider covers subtle to silly.
+
+$names: pulse, throb, heartbeat, wiggle, shake-x, shake-y, head-shake, bounce,
+    float, swing, tada, wobble, jello, rubber-band, flash, spin;
+
+.ml-anim {
+    animation-duration: var(--ml-anim-duration, 1s);
+    animation-delay: var(--ml-anim-delay, 0s);
+    animation-iteration-count: var(--ml-anim-repeat, 1);
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: both;
+    // Where supported this adds to a transform the block already has, so an
+    // animated block can also carry a 3D transform.
+    animation-composition: add;
+}
+
+// Paused by the frontend script while the block is off screen.
+.ml-anim.is-ml-anim-paused {
+    animation-play-state: paused;
+}
+
+@each $name in $names {
+    .ml-anim-#{$name} {
+        animation-name: ml-anim-#{$name};
+    }
+}
+
+.ml-anim-swing {
+    transform-origin: top center;
+}
+
+.ml-anim-spin {
+    animation-timing-function: linear;
+}
+
+@keyframes ml-anim-pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(calc(1 + 0.08 * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-throb {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(calc(1 + 0.16 * var(--ml-anim-strength, 1)));
+        opacity: calc(1 - 0.25 * var(--ml-anim-strength, 1));
+    }
+}
+
+@keyframes ml-anim-heartbeat {
+
+    0%,
+    28%,
+    70%,
+    100% {
+        transform: scale(1);
+    }
+
+    14%,
+    42% {
+        transform: scale(calc(1 + 0.15 * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-wiggle {
+
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+
+    25% {
+        transform: rotate(calc(3deg * var(--ml-anim-strength, 1)));
+    }
+
+    75% {
+        transform: rotate(calc(-3deg * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-shake-x {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: translateX(calc(-10px * var(--ml-anim-strength, 1)));
+    }
+
+    20%,
+    40%,
+    60%,
+    80% {
+        transform: translateX(calc(10px * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-shake-y {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: translateY(calc(-10px * var(--ml-anim-strength, 1)));
+    }
+
+    20%,
+    40%,
+    60%,
+    80% {
+        transform: translateY(calc(10px * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-head-shake {
+
+    0%,
+    50%,
+    100% {
+        transform: translateX(0) rotateY(0deg);
+    }
+
+    6.5% {
+        transform: translateX(calc(-6px * var(--ml-anim-strength, 1))) rotateY(calc(-9deg * var(--ml-anim-strength, 1)));
+    }
+
+    18.5% {
+        transform: translateX(calc(5px * var(--ml-anim-strength, 1))) rotateY(calc(7deg * var(--ml-anim-strength, 1)));
+    }
+
+    31.5% {
+        transform: translateX(calc(-3px * var(--ml-anim-strength, 1))) rotateY(calc(-5deg * var(--ml-anim-strength, 1)));
+    }
+
+    43.5% {
+        transform: translateX(calc(2px * var(--ml-anim-strength, 1))) rotateY(calc(3deg * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-bounce {
+
+    0%,
+    20%,
+    53%,
+    100% {
+        transform: translateY(0);
+        animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+    }
+
+    40%,
+    43% {
+        transform: translateY(calc(-30px * var(--ml-anim-strength, 1)));
+        animation-timing-function: cubic-bezier(0.755, 0.05, 0.855, 0.06);
+    }
+
+    70% {
+        transform: translateY(calc(-15px * var(--ml-anim-strength, 1)));
+        animation-timing-function: cubic-bezier(0.755, 0.05, 0.855, 0.06);
+    }
+
+    80% {
+        transform: translateY(calc(-4px * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-float {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(calc(-12px * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-swing {
+
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+
+    20% {
+        transform: rotate(calc(15deg * var(--ml-anim-strength, 1)));
+    }
+
+    40% {
+        transform: rotate(calc(-10deg * var(--ml-anim-strength, 1)));
+    }
+
+    60% {
+        transform: rotate(calc(5deg * var(--ml-anim-strength, 1)));
+    }
+
+    80% {
+        transform: rotate(calc(-5deg * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-tada {
+
+    0%,
+    100% {
+        transform: scale(1) rotate(0deg);
+    }
+
+    10%,
+    20% {
+        transform: scale(calc(1 - 0.09 * var(--ml-anim-strength, 1))) rotate(calc(-3deg * var(--ml-anim-strength, 1)));
+    }
+
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: scale(calc(1 + 0.1 * var(--ml-anim-strength, 1))) rotate(calc(3deg * var(--ml-anim-strength, 1)));
+    }
+
+    40%,
+    60%,
+    80% {
+        transform: scale(calc(1 + 0.1 * var(--ml-anim-strength, 1))) rotate(calc(-3deg * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-wobble {
+
+    0%,
+    100% {
+        transform: translateX(0) rotate(0deg);
+    }
+
+    15% {
+        transform: translateX(calc(-25% * var(--ml-anim-strength, 1))) rotate(calc(-5deg * var(--ml-anim-strength, 1)));
+    }
+
+    30% {
+        transform: translateX(calc(20% * var(--ml-anim-strength, 1))) rotate(calc(3deg * var(--ml-anim-strength, 1)));
+    }
+
+    45% {
+        transform: translateX(calc(-15% * var(--ml-anim-strength, 1))) rotate(calc(-3deg * var(--ml-anim-strength, 1)));
+    }
+
+    60% {
+        transform: translateX(calc(10% * var(--ml-anim-strength, 1))) rotate(calc(2deg * var(--ml-anim-strength, 1)));
+    }
+
+    75% {
+        transform: translateX(calc(-5% * var(--ml-anim-strength, 1))) rotate(calc(-1deg * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-jello {
+
+    0%,
+    11.1%,
+    100% {
+        transform: skewX(0deg) skewY(0deg);
+    }
+
+    22.2% {
+        transform: skewX(calc(-12.5deg * var(--ml-anim-strength, 1))) skewY(calc(-12.5deg * var(--ml-anim-strength, 1)));
+    }
+
+    33.3% {
+        transform: skewX(calc(6.25deg * var(--ml-anim-strength, 1))) skewY(calc(6.25deg * var(--ml-anim-strength, 1)));
+    }
+
+    44.4% {
+        transform: skewX(calc(-3.125deg * var(--ml-anim-strength, 1))) skewY(calc(-3.125deg * var(--ml-anim-strength, 1)));
+    }
+
+    55.5% {
+        transform: skewX(calc(1.5625deg * var(--ml-anim-strength, 1))) skewY(calc(1.5625deg * var(--ml-anim-strength, 1)));
+    }
+
+    66.6% {
+        transform: skewX(calc(-0.78125deg * var(--ml-anim-strength, 1))) skewY(calc(-0.78125deg * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-rubber-band {
+
+    0%,
+    100% {
+        transform: scale(1, 1);
+    }
+
+    30% {
+        transform: scale(calc(1 + 0.25 * var(--ml-anim-strength, 1)), calc(1 - 0.25 * var(--ml-anim-strength, 1)));
+    }
+
+    40% {
+        transform: scale(calc(1 - 0.25 * var(--ml-anim-strength, 1)), calc(1 + 0.1 * var(--ml-anim-strength, 1)));
+    }
+
+    50% {
+        transform: scale(calc(1 + 0.15 * var(--ml-anim-strength, 1)), calc(1 - 0.05 * var(--ml-anim-strength, 1)));
+    }
+
+    65% {
+        transform: scale(calc(1 - 0.05 * var(--ml-anim-strength, 1)), calc(1 + 0.05 * var(--ml-anim-strength, 1)));
+    }
+}
+
+@keyframes ml-anim-flash {
+
+    0%,
+    50%,
+    100% {
+        opacity: 1;
+    }
+
+    25%,
+    75% {
+        opacity: calc(1 - 0.9 * var(--ml-anim-strength, 1));
+    }
+}
+
+@keyframes ml-anim-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(calc(360deg * var(--ml-anim-strength, 1)));
+    }
+}
+
+// Reduced motion: hold still.
+@media (prefers-reduced-motion: reduce) {
+    .ml-anim {
+        animation: none !important;
+    }
+}

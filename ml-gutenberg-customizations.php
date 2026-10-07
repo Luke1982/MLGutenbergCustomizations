@@ -82,6 +82,12 @@ class ML_Gutenberg_Customizations {
 		add_filter( 'render_block', array( $this, 'apply_text_gradient' ), 10, 2 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_text_gradient_styles' ) );
 		add_action( 'enqueue_block_assets', array( $this, 'enqueue_text_gradient_editor_styles' ) );
+
+		// Attention-seeker animations.
+		add_filter( 'register_block_type_args', array( $this, 'register_animation_attribute' ) );
+		add_filter( 'render_block', array( $this, 'apply_animation' ), 10, 2 );
+		add_action( 'enqueue_block_assets', array( $this, 'enqueue_animation_styles' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_animation_script' ) );
 	}
 
 	/**
@@ -2051,6 +2057,144 @@ class ML_Gutenberg_Customizations {
 		wp_add_inline_style(
 			'ml-gutenberg-text-gradient-editor',
 			$this->get_text_gradient_css( '[data-block]', ' !important' )
+		);
+	}
+
+	/**
+	 * The animations on offer. Our own keyframes, modelled on the attention
+	 * seekers everyone knows, with every amplitude driven by a strength
+	 * variable.
+	 * Mirrored in src/utils/animations.js — keep both in sync.
+	 */
+	private const ANIMATIONS = array(
+		'pulse',
+		'throb',
+		'heartbeat',
+		'wiggle',
+		'shake-x',
+		'shake-y',
+		'head-shake',
+		'bounce',
+		'float',
+		'swing',
+		'tada',
+		'wobble',
+		'jello',
+		'rubber-band',
+		'flash',
+		'spin',
+	);
+
+	/**
+	 * Register the animation attribute server-side on every block, so
+	 * ServerSideRender previews accept it.
+	 *
+	 * @param array $args Block type registration arguments.
+	 * @return array Arguments with the mlAnimation attribute added.
+	 */
+	public function register_animation_attribute( array $args ): array {
+		$args['attributes'] = is_array( $args['attributes'] ?? null ) ? $args['attributes'] : array();
+
+		$args['attributes']['mlAnimation'] = array( 'type' => 'object' );
+
+		return $args;
+	}
+
+	/**
+	 * Put an animation on a block.
+	 *
+	 * Mirrors getAnimationProps() in src/utils/animations.js.
+	 *
+	 * @param string $block_content The block's rendered HTML.
+	 * @param array  $block         The parsed block data.
+	 * @return string Modified block HTML.
+	 */
+	public function apply_animation( string $block_content, array $block ): string {
+		$raw  = is_array( $block['attrs']['mlAnimation'] ?? null ) ? $block['attrs']['mlAnimation'] : array();
+		$name = isset( $raw['name'] ) && in_array( $raw['name'], self::ANIMATIONS, true ) ? $raw['name'] : '';
+
+		if ( '' === $name ) {
+			return $block_content;
+		}
+
+		$processor = new \WP_HTML_Tag_Processor( $block_content );
+
+		do {
+			if ( ! $processor->next_tag() ) {
+				return $block_content;
+			}
+		} while ( in_array( $processor->get_tag(), self::TRANSFORM_3D_SKIPPED_TAGS, true ) );
+
+		$strength = $this->clamp_number( $raw['strength'] ?? null, 0.25, 3, 1 );
+		$duration = (int) $this->clamp_number( $raw['duration'] ?? null, 100, 10000, 1000 );
+		$delay    = (int) $this->clamp_number( $raw['delay'] ?? null, 0, 5000, 0 );
+		$repeat   = 'infinite' === ( $raw['repeat'] ?? null )
+			? 'infinite'
+			: (string) (int) $this->clamp_number( $raw['repeat'] ?? null, 1, 100, 1 );
+
+		$declarations = array(
+			'--ml-anim-strength:' . self::format_css_number( (float) $strength ),
+			'--ml-anim-duration:' . $duration . 'ms',
+			'--ml-anim-repeat:' . $repeat,
+		);
+
+		if ( $delay > 0 ) {
+			$declarations[] = '--ml-anim-delay:' . $delay . 'ms';
+		}
+
+		$existing_class = $processor->get_attribute( 'class' ) ?? '';
+		$processor->set_attribute( 'class', trim( $existing_class . ' ml-anim ml-anim-' . $name ) );
+
+		$existing_style = $processor->get_attribute( 'style' ) ?? '';
+		$declaration    = implode( ';', $declarations );
+		$processor->set_attribute(
+			'style',
+			$existing_style ? rtrim( $existing_style, ';' ) . ';' . $declaration : $declaration
+		);
+
+		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Enqueue the animation keyframes, and the script that pauses an
+	 * animation while its block is off screen.
+	 *
+	 * The stylesheet goes to the editor as well, so a block animates while it
+	 * is being set up; the script stays on the frontend.
+	 */
+	public function enqueue_animation_styles(): void {
+		$css_file = plugin_dir_path( __FILE__ ) . 'build/animations.css';
+
+		if ( ! file_exists( $css_file ) ) {
+			return;
+		}
+
+		wp_enqueue_style(
+			'ml-gutenberg-animations',
+			plugin_dir_url( __FILE__ ) . 'build/animations.css',
+			array(),
+			filemtime( $css_file )
+		);
+	}
+
+	/**
+	 * Enqueue the frontend script that pauses off-screen animations.
+	 */
+	public function enqueue_animation_script(): void {
+		$asset_file = plugin_dir_path( __FILE__ ) . 'build/animations.asset.php';
+
+		if ( ! file_exists( $asset_file ) ) {
+			return;
+		}
+
+		$asset = include $asset_file;
+
+		wp_enqueue_script(
+			'ml-gutenberg-animations',
+			plugin_dir_url( __FILE__ ) . 'build/animations.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true // Load in footer.
 		);
 	}
 

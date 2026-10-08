@@ -24,7 +24,7 @@ describe("normalizeFilters", () => {
   it("clamps out-of-range values", () => {
     const f = normalizeFilters({ blur: 9999, brightness: -50, hueRotate: 400 });
 
-    expect(f.blur).toBe(50);
+    expect(f.blur).toBe(300);
     expect(f.brightness).toBe(0);
     expect(f.hueRotate).toBe(180);
   });
@@ -83,7 +83,7 @@ describe("getFilterValue", () => {
   });
 
   it("clamps before writing the value", () => {
-    expect(getFilterValue({ blur: 9999 })).toBe("blur(50px)");
+    expect(getFilterValue({ blur: 9999 })).toBe("blur(300px)");
   });
 });
 

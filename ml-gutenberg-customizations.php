@@ -1522,7 +1522,7 @@ class ML_Gutenberg_Customizations {
 	 * Mirrored in src/utils/filters.js — keep both in sync.
 	 */
 	private const FILTER_RANGES = array(
-		'blur'       => array( 0, 50, 0, 'px', 'blur' ),
+		'blur'       => array( 0, 300, 0, 'px', 'blur' ),
 		'brightness' => array( 0, 300, 100, '%', 'brightness' ),
 		'contrast'   => array( 0, 300, 100, '%', 'contrast' ),
 		'saturate'   => array( 0, 300, 100, '%', 'saturate' ),

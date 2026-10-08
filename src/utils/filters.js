@@ -23,7 +23,7 @@ function toNumber(value, fallback) {
  * and the value that means "no effect".
  */
 export const FILTER_RANGES = {
-  blur: { min: 0, max: 50, step: 0.5, neutral: 0, unit: "px", css: "blur" },
+  blur: { min: 0, max: 300, step: 0.5, neutral: 0, unit: "px", css: "blur" },
   brightness: { min: 0, max: 300, step: 5, neutral: 100, unit: "%", css: "brightness" },
   contrast: { min: 0, max: 300, step: 5, neutral: 100, unit: "%", css: "contrast" },
   saturate: { min: 0, max: 300, step: 5, neutral: 100, unit: "%", css: "saturate" },

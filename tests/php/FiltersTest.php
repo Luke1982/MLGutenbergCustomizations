@@ -76,7 +76,7 @@ final class FiltersTest extends TestCase {
 	public function test_values_are_clamped(): void {
 		$updated = $this->render( array( 'blur' => 9999, 'hueRotate' => -400 ) );
 
-		$this->assertStringContainsString( '--ml-filter:blur(50px) hue-rotate(-180deg)', $updated );
+		$this->assertStringContainsString( '--ml-filter:blur(300px) hue-rotate(-180deg)', $updated );
 	}
 
 	public function test_values_that_are_not_numbers_are_ignored(): void {

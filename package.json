@@ -1,6 +1,6 @@
 {
 	"name": "ml-gutenberg-customizations",
-	"version": "1.18.1",
+	"version": "1.19.0",
 	"description": "Custom margin and padding controls for mobile screens in the WordPress Gutenberg editor.",
 	"private": true,
 	"scripts": {

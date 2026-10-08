@@ -54,6 +54,7 @@ export function normalizeAnimation(raw) {
       repeat === "infinite"
         ? "infinite"
         : Math.round(clamp(toNumber(repeat, 1), 1, 100)),
+    disableOnMobile: !!stored.disableOnMobile,
   };
 }
 
@@ -79,5 +80,9 @@ export function getAnimationProps(raw) {
     style["--ml-anim-delay"] = `${animation.delay}ms`;
   }
 
-  return { className: `ml-anim ml-anim-${animation.name}`, style };
+  const className = animation.disableOnMobile
+    ? `ml-anim ml-anim-${animation.name} ml-anim-desktop-only`
+    : `ml-anim ml-anim-${animation.name}`;
+
+  return { className, style };
 }

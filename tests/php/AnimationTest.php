@@ -87,6 +87,12 @@ final class AnimationTest extends TestCase {
 		}
 	}
 
+	public function test_it_can_sit_still_on_mobile(): void {
+		$updated = $this->render( array( 'name' => 'pulse', 'disableOnMobile' => true ) );
+
+		$this->assertStringContainsString( 'ml-anim ml-anim-pulse ml-anim-desktop-only', $updated );
+	}
+
 	public function test_existing_class_and_style_are_preserved(): void {
 		$updated = $this->render(
 			array( 'name' => 'pulse' ),

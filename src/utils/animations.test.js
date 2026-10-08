@@ -26,6 +26,7 @@ describe("normalizeAnimation", () => {
       duration: 1000,
       delay: 0,
       repeat: 1,
+      disableOnMobile: false,
     });
   });
 
@@ -76,6 +77,12 @@ describe("getAnimationProps", () => {
 
   it("leaves out a delay of zero", () => {
     expect(getAnimationProps({ name: "pulse" }).style["--ml-anim-delay"]).toBeUndefined();
+  });
+
+  it("marks an animation that should sit still on mobile", () => {
+    expect(
+      getAnimationProps({ name: "pulse", disableOnMobile: true }).className,
+    ).toBe("ml-anim ml-anim-pulse ml-anim-desktop-only");
   });
 
   it("says forever when it should loop", () => {

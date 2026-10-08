@@ -2142,8 +2142,14 @@ class ML_Gutenberg_Customizations {
 			$declarations[] = '--ml-anim-delay:' . $delay . 'ms';
 		}
 
+		$classes = 'ml-anim ml-anim-' . $name;
+
+		if ( ! empty( $raw['disableOnMobile'] ) ) {
+			$classes .= ' ml-anim-desktop-only';
+		}
+
 		$existing_class = $processor->get_attribute( 'class' ) ?? '';
-		$processor->set_attribute( 'class', trim( $existing_class . ' ml-anim ml-anim-' . $name ) );
+		$processor->set_attribute( 'class', trim( $existing_class . ' ' . $classes ) );
 
 		$existing_style = $processor->get_attribute( 'style' ) ?? '';
 		$declaration    = implode( ';', $declarations );

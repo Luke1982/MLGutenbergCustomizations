@@ -76,3 +76,11 @@ $value in $justify-map {
 .has-mobile-bg-position {
     background-position: var(--ml-mobile-bg-position) !important;
 }
+
+
+// ── Animations held still on mobile ─────────────────────────────────
+// This stylesheet only loads below the breakpoint, so the rule needs no
+// media query of its own.
+.ml-anim-desktop-only {
+    animation: none !important;
+}

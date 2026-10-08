@@ -4,6 +4,7 @@ import {
   Button,
   RangeControl,
   SelectControl,
+  ToggleControl,
 } from "@wordpress/components";
 import { __ } from "@wordpress/i18n";
 
@@ -129,6 +130,17 @@ export default function AnimationPanel({ attributes, setAttributes }) {
                     repeat: value === "infinite" ? "infinite" : Number(value),
                   })
                 }
+                __nextHasNoMarginBottom
+              />
+
+              <ToggleControl
+                label={__("Disable on mobile", "ml-gutenberg-customizations")}
+                help={__(
+                  "Holds the block still below the mobile breakpoint.",
+                  "ml-gutenberg-customizations",
+                )}
+                checked={animation.disableOnMobile}
+                onChange={(value) => update({ disableOnMobile: value })}
                 __nextHasNoMarginBottom
               />
 
